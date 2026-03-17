@@ -152,7 +152,9 @@ def generate_pipeline(
         product_name = random.choice(products)
         base_price = products_df.loc[products_df["product"] == product_name, "sales_price"].values[0]
 
-        # Performance influencia win/loss mais realista
+        # Performance influencia win/loss mais realista.
+        # Deals ativos (Engaging/Prospecting) têm close_value estimado pelo rep (~70% dos casos),
+        # simulando CRMs reais onde o vendedor preenche o valor esperado na qualificação.
         if stage == "Won":
             if agent in high_perf_agents:
                 close_value = base_price * random.uniform(0.9, 1.3)
@@ -160,6 +162,9 @@ def generate_pipeline(
                 close_value = base_price * random.uniform(0.6, 0.95)
             else:
                 close_value = base_price * random.uniform(0.75, 1.1)
+        elif stage in ("Engaging", "Prospecting") and random.random() < 0.70:
+            # 70% dos deals ativos têm valor estimado; 30% ainda não foram qualificados
+            close_value = base_price * random.uniform(0.5, 1.2)
         else:
             close_value = 0.0
 

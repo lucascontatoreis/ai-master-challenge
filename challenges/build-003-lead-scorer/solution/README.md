@@ -45,22 +45,33 @@ Cada deal recebe uma nota de **0 a 100 pontos**, composta por 5 fatores:
 | Fator | Peso | Critério |
 |-------|------|----------|
 | **Stage de Pipeline** | 25 pts | Engaging = 25, Prospecting = 15 |
-| **Valor do Deal** | 20 pts | Normalizado pela raiz quadrada do valor máximo do pipeline |
-| **Velocidade no Pipeline** | 20 pts | Baseado em dias desde o engajamento vs. mediana histórica |
+| **Potencial do Deal** | 20 pts | `close_value` se preenchido; preço de tabela do produto como proxy se não qualificado |
+| **Velocidade + Urgência** | 20 pts | Dias no pipeline vs. mediana histórica + boost se fecha em ≤30 dias |
 | **Qualidade da Conta** | 20 pts | Setor estratégico (15 setores mapeados) + tamanho da empresa |
 | **Performance do Vendedor** | 15 pts | Taxa histórica de fechamento do agente vs. média do time |
 
 ### Por que esses critérios?
 
-**Stage** — Engaging é evidência direta de interesse. Prospecting ainda é hipótese.
+**Stage** — Engaging é evidência direta de interesse ativo. Prospecting ainda é hipótese.
 
-**Valor** — Deal grande merece atenção, mas com raiz quadrada para não dominar o score e esconder deals menores com alta probabilidade.
+**Potencial** — Usa `close_value` quando disponível. Para deals não qualificados (valor = 0), usa o preço de tabela do produto como proxy — assim produtos da série MG (premium) pontuam mais que GTX, mesmo sem valor confirmado. Normalizado com raiz quadrada para não deixar outliers dominar.
 
-**Velocidade** — Pipeline com momentum positivo tem maior chance de fechar. Deal parado por 2x a mediana histórica tem risco real de esfriar. É o fator que mais diferencia deals que parecem iguais na superfície.
+**Velocidade + Urgência** — Dois componentes combinados: (1) deals com bom ritmo de avanço pontuam mais; deals parados há 2x a mediana histórica perdem pontos. (2) Se a data de fechamento está dentro de 14 dias, recebe boost de urgência — independente do stage.
 
-**Conta** — Setores com ciclos de compra recorrentes e grande base de funcionários têm potencial de expansão. Um deal pequeno numa conta grande pode virar uma conta estratégica.
+**Conta** — Setores com ciclos de compra recorrentes e grande base de funcionários têm potencial de expansão. Deal pequeno numa conta grande pode virar conta estratégica.
 
-**Agente** — Taxa histórica do vendedor é proxy de qualidade da qualificação. Vendedores com alta win rate tendem a ter pipeline mais limpo.
+**Agente** — Taxa histórica do vendedor é proxy de qualidade de qualificação. Vendedores com alta win rate tendem a ter pipeline mais limpo.
+
+### Risk Flags (alertas sem penalidade no score)
+
+Além do score, cada deal pode ter alertas visuais:
+
+| Flag | Significado |
+|------|------------|
+| 📅 Vencido há Xd | Data de fechamento já passou — deal atrasado |
+| 🧊 Inativo há Xd | Mais de 90 dias no pipeline sem avançar |
+| 💰 Sem close_value | Deal não qualificado financeiramente |
+| 💰 Produto premium sem valor | Alto ticket potencial, mas valor ainda não confirmado |
 
 ### Explainability
 
