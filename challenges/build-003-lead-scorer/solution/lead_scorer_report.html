@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lead Scorer — Pipeline Priorizado</title>
+<script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+         margin: 0; background: #f5f7fa; color: #2c3e50; }
+  .header { background: #2c3e50; color: white; padding: 24px 40px; }
+  .header h1 { margin: 0; font-size: 1.8em; }
+  .header p  { margin: 4px 0 0; opacity: 0.7; }
+  .container { max-width: 1400px; margin: 0 auto; padding: 24px 40px; }
+  .kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; margin-bottom: 32px; }
+  .kpi  { background: white; border-radius: 8px; padding: 20px; text-align: center;
+           box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+  .kpi .val { font-size: 2em; font-weight: 700; }
+  .kpi .lbl { font-size: 0.85em; color: #7f8c8d; margin-top: 4px; }
+  .charts { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; margin-bottom: 32px; }
+  .chart-card { background: white; border-radius: 8px; padding: 16px;
+                 box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+  .section-title { font-size: 1.2em; font-weight: 600; margin: 32px 0 12px; }
+  table { width: 100%; border-collapse: collapse; background: white; border-radius: 8px;
+           overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,.08); font-size: 0.88em; }
+  th { background: #2c3e50; color: white; padding: 10px 8px; text-align: left; }
+  td { padding: 8px; border-bottom: 1px solid #eee; }
+  tr:last-child td { border-bottom: none; }
+  .note { color: #7f8c8d; font-size: 0.82em; margin-top: 8px; }
+  .footer { text-align: center; padding: 24px; color: #7f8c8d; font-size: 0.82em; }
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>🎯 Lead Scorer — Pipeline Priorizado</h1>
+  <p>Challenge 003 · G4 AI Master · 17/03/2026 20:25</p>
+</div>
+
+<div class="container">
+  <div class="kpis">
+    <div class="kpi"><div class="val" style="color:#e74c3c">796</div>
+      <div class="lbl">🔴 Quentes ≥P85 (73)</div></div>
+    <div class="kpi"><div class="val" style="color:#e67e22">1,308</div>
+      <div class="lbl">🟠 Mornos P60–P85</div></div>
+    <div class="kpi"><div class="val" style="color:#3498db">3,154</div>
+      <div class="lbl">🔵 Frios &lt;P60 (66)</div></div>
+    <div class="kpi"><div class="val" style="color:#e67e22">4,335</div>
+      <div class="lbl">⚠️ Com Alertas</div></div>
+    <div class="kpi"><div class="val" style="color:#27ae60">R$ 31,084,073</div>
+      <div class="lbl">💰 Valor em Quentes</div></div>
+  </div>
+
+  <div class="charts">
+    <div class="chart-card"><div id="hist"></div></div>
+    <div class="chart-card"><div id="factors"></div></div>
+    <div class="chart-card"><div id="cleanup"></div></div>
+  </div>
+
+  <div class="section-title">Top 50 Deals Priorizados</div>
+  <p class="note">🔴 Quente (≥73) · 🟠 Morno (66–73) · 🔵 Frio (&lt;66) — P(win) via sigmoid calibrada (score 65 → 50%)</p>
+  <table>
+    <thead>
+      <tr>
+        <th>#</th><th>Deal ID</th><th>Vendedor</th><th>Conta</th>
+        <th>Produto</th><th>Stage</th><th>Valor</th><th>Score</th>
+        <th>P(win)</th><th>Alertas</th>
+      </tr>
+    </thead>
+    <tbody>
+        <tr style="background:#fde8e8">
+          <td>1</td>
+          <td>OP_05054</td>
+          <td>Jamie Wright</td>
+          <td>Account_016</td>
+          <td>MG Advanced</td>
+          <td>Engaging</td>
+          <td>R$ 79,463</td>
+          <td style="font-weight:700">92</td>
+          <td>91%</td>
+          <td style="font-size:0.85em"></td>
+        </tr>
+        <tr style="background:#fde8e8">
+          <td>2</td>
+          <td>OP_04859</td>
+          <td>Spencer Walker</td>
+          <td>Account_070</td>
+          <td>MG Advanced</td>
+          <td>Engaging</td>
+          <td>R$ 81,922</td>
+          <td style="font-weight:700">92</td>
+          <td>90%</td>
+          <td style="font-size:0.85em">🧊 Inativo há 125d</td>
+        </tr>
+        <tr style="background:#fde8e8">
+          <td>3</td>
+          <td>OP_01911</td>
+          <td>Peyton Harris</td>
+          <td>Account_056</td>
+          <td>MG Ultimate</td>
+          <td>Engaging</td>
+          <td>—</td>
+          <td style="font-weight:700">91</td>
+          <td>90%</td>
+          <td style="font-size:0.85em">💰 Produto premium (MG Ultimate) sem valor confirmado</td>
+        </tr>
+        <tr style="background:#fde8e8">
+          <td>4</td>
+          <td>OP_06936</td>
+          <td>Ariel Lewis</td>
+          <td>Account_056</td>
+          <td>MG Special</td>
+          <td>Engaging</td>
+          <td>—</td>
+          <td style="font-weight:700">90</td>
+          <td>89%</td>
+          <td style="font-size:0.85em">💰 Produto premium (MG Special) sem valor confirmado</td>
+        </tr>
+        <tr style="background:#fde8e8">
+          <td>5</td>
+          <td>OP_00591</td>
+          <td>Corey King</td>
+          <td>Account_082</td>
+          <td>MG Ultimate</td>
+          <td>Engaging</td>
+          <td>—</td>
+          <td style="font-weight:700">89</td>
+          <td>88%</td>
+          <td style="font-size:0.85em">💰 Produto premium (MG Ultimate) sem valor confirmado</td>
+        </tr>
+        <tr style="background:#fde8e8">
+          <td>6</td>
+          <td>OP_08114</td>
+          <td>Charlie Young</td>
+          <td>Account_070</td>
+          <td>GTXPro Plus</td>
+          <td>Engaging</td>
+          <td>R$ 53,894</td>
+          <td style="font-weight:700">89</td>
+          <td>88%</td>
+          <td style="font-size:0.85em">🧊 Inativo há 133d</td>
+        </tr>
+        <tr style="background:#fde8e8">
+          <td>7</td>
+          <td>OP_07474</td>
+          <td>Carter Ramirez</td>
+          <td>Account_056</td>
+          <td>MG Advanced</td>
+          <td>Engaging</td>
+          <td>R$ 83,016</td>
+          <td style="font-weight:700">88</td>
+          <td>88%</td>
+          <td style="font-size:0.85em"></td>
+        </tr>
+        <tr style="background:#fde8e8">
+          <td>8</td>
+          <td>OP_01763</td>
+          <td>Bailey Allen</td>
+          <td>Account_011</td>
+          <td>MG Ultimate</td>
+          <td>Engaging</td>
+          <td>—</td>
+          <td style="font-weight:700">88</td>
+          <td>87%</td>
+          <td style="font-size:0.85em">💰 Produto premium (MG Ultimate) sem valor confirmado</td>
+        </tr>
+        <tr style="background:#fde8e8">
+          <td>9</td>
+          <td>OP_04932</td>
+          <td>Peyton Harris</td>
+          <td>Account_067</td>
+          <td>MG Advanced</td>
+          <td>Engaging</td>
+          <td>R$ 89,790</td>
+          <td style="font-weight:700">88</td>
+          <td>87%</td>
+          <td style="font-size:0.85em"></td>
+        </tr>
+        <tr style="background:#fde8e8">
+          <td>10</td>
+          <td>OP_04362</td>
+          <td>Devon Perez</td>
+          <td>Account_011</td>
+          <td>MG Special</td>
+          <td>Engaging</td>
+          <td>—</td>
+          <td style="font-weight:700">88</td>
+          <td>87%</td>
+          <td style="font-size:0.85em">💰 Produto premium (MG Special) sem valor confirmado</td>
+        </tr>
+        <tr style="background:#fde8e8">
+          <td>11</td>
+          <td>OP_02909</td>
+          <td>Devon Perez</td>
+          <td>Account_038</td>
+          <td>MG Ultimate</td>
+          <td>Engaging</td>
+          <td>R$ 107,826</td>
+          <td style="font-weight:700">87</td>
+          <td>87%</td>
+          <td style="font-size:0.85em"></td>
+        </tr>
+        <tr style="background:#fde8e8">
+          <td>12</td>
+          <td>OP_07010</td>
+          <td>Remi Sanchez</td>
+          <td>Account_011</td>
+          <td>MG Advanced</td>
+          <td>Engaging</td>
+          <td>—</td>
+          <td style="font-weight:700">87</td>
+          <td>86%</td>
+          <td style="font-size:0.85em">🧊 Inativo há 115d | 💰 Produto premium (MG Advanced) sem valor confirmado</td>
+        </tr>
+        <tr style="background:#fde8e8">
+          <td>13</td>
+          <td>OP_00958</td>
+          <td>Jaden Clark</td>
+          <td>Account_015</td>
+          <td>MG Advanced</td>
+          <td>Engaging</td>
+          <td>R$ 74,230</td>
+          <td style="font-weight:700">87</td>
+          <td>86%</td>
+          <td style="font-size:0.85em"></td>
+        </tr>
+        <tr style="background:#fde8e8">
+          <td>14</td>
+          <td>OP_02614</td>
+          <td>Remi Sanchez</td>
+          <td>Account_056</td>
+          <td>MG Ultimate</td>
+          <td>Engaging</td>
+          <td>R$ 59,747</td>
+          <td style="font-weight:700">87</td>
+          <td>86%</td>
+          <td style="font-size:0.85em"></td>
+        </tr>
+        <tr style="background:#fde8e8">
+          <td>15</td>
+          <td>OP_00100</td>
+          <td>Corey King</td>
+          <td>Account_052</td>
+          <td>MG Special</td>
+          <td>Engaging</td>
+          <td>—</td>
+          <td style="font-weight:700">87</td>
+          <td>86%</td>
+          <td style="font-size:0.85em">💰 Produto premium (MG Special) sem valor confirmado</td>
+        </tr>
+        <tr style="background:#fde8e8">
+          <td>16</td>
+          <td>OP_07728</td>
+          <td>Spencer Walker</td>
+          <td>Account_045</td>
+          <td>MG Special</td>
+          <td>Engaging</td>
+          <td>—</td>
+          <td style="font-weight:700">87</td>
+          <td>86%</td>
+          <td style="font-size:0.85em">💰 Produto premium (MG Special) sem valor confirmado</td>
+        </tr>
+        <tr style="background:#fde8e8">
+          <td>17</td>
+          <td>OP_06374</td>
+          <td>Remi Sanchez</td>
+          <td>Account_016</td>
+          <td>MG Ultimate</td>
+          <td>Engaging</td>
+          <td>—</td>
+          <td style="font-weight:700">87</td>
+          <td>86%</td>
+          <td style="font-size:0.85em">💰 Produto premium (MG Ultimate) sem valor confirmado</td>
+        </tr>
+        <tr style="background:#fde8e8">
+          <td>18</td>
+          <td>OP_01314</td>
+          <td>Emerson Moore</td>
+          <td>Account_016</td>
+          <td>MG Special</td>
+          <td>Engaging</td>
+          <td>R$ 56,090</td>
+          <td style="font-weight:700">87</td>
+          <td>86%</td>
+          <td style="font-size:0.85em">🧊 Inativo há 169d</td>
+        </tr>
+        <tr style="background:#fde8e8">
+          <td>19</td>
+          <td>OP_05303</td>
+          <td>Jamie Wright</td>
+          <td>Account_070</td>
+          <td>MG Special</td>
+          <td>Engaging</td>
+          <td>R$ 35,905</td>
+          <td style="font-weight:700">87</td>
+          <td>86%</td>
+          <td style="font-size:0.85em">🧊 Inativo há 119d</td>
+        </tr>
+        <tr style="background:#fde8e8">
+          <td>20</td>
+          <td>OP_04673</td>
+          <td>Finley Martin</td>
+          <td>Account_070</td>
+          <td>MG Special</td>
+          <td>Engaging</td>
+          <td>R$ 53,129</td>
+          <td style="font-weight:700">86</td>
+          <td>86%</td>
+          <td style="font-size:0.85em"></td>
+        </tr>
+        <tr style="background:#fde8e8">
+          <td>21</td>
+          <td>OP_01273</td>
+          <td>Emerson Moore</td>
+          <td>Account_016</td>
+          <td>MG Advanced</td>
+          <td>Engaging</td>
+          <td>—</td>
+          <td style="font-weight:700">86</td>
+          <td>86%</td>
+          <td style="font-size:0.85em">🧊 Inativo há 172d | 💰 Produto premium (MG Advanced) sem valor confirmado</td>
+        </tr>
+        <tr style="background:#fde8e8">
+          <td>22</td>
+          <td>OP_01500</td>
+          <td>Remi Sanchez</td>
+          <td>Account_067</td>
+          <td>MG Advanced</td>
+          <td>Engaging</td>
+          <td>—</td>
+          <td style="font-weight:700">86</td>
+          <td>86%</td>
+          <td style="font-size:0.85em">💰 Produto premium (MG Advanced) sem valor confirmado</td>
+        </tr>
+        <tr style="background:#fde8e8">
+          <td>23</td>
+          <td>OP_06321</td>
+          <td>Corey King</td>
+          <td>Account_083</td>
+          <td>MG Advanced</td>
+          <td>Engaging</td>
+          <td>R$ 89,934</td>
+          <td style="font-weight:700">86</td>
+          <td>85%</td>
+          <td style="font-size:0.85em">🧊 Inativo há 114d</td>
+        </tr>
+        <tr style="background:#fde8e8">
+          <td>24</td>
+          <td>OP_00720</td>
+          <td>Ariel Lewis</td>
+          <td>Account_070</td>
+          <td>GTX Pro</td>
+          <td>Engaging</td>
+          <td>—</td>
+          <td style="font-weight:700">86</td>
+          <td>85%</td>
+          <td style="font-size:0.85em">🧊 Inativo há 109d | 💰 Sem close_value — qualificar ticket</td>
+        </tr>
+        <tr style="background:#fde8e8">
+          <td>25</td>
+          <td>OP_00926</td>
+          <td>Elliot Robinson</td>
+          <td>Account_070</td>
+          <td>MG Advanced</td>
+          <td>Engaging</td>
+          <td>R$ 65,978</td>
+          <td style="font-weight:700">86</td>
+          <td>85%</td>
+          <td style="font-size:0.85em"></td>
+        </tr>
+        <tr style="background:#fde8e8">
+          <td>26</td>
+          <td>OP_07232</td>
+          <td>Ariel Lewis</td>
+          <td>Account_007</td>
+          <td>MG Advanced</td>
+          <td>Engaging</td>
+          <td>—</td>
+          <td style="font-weight:700">86</td>
+          <td>85%</td>
+          <td style="font-size:0.85em">💰 Produto premium (MG Advanced) sem valor confirmado</td>
+        </tr>
+        <tr style="background:#fde8e8">
+          <td>27</td>
+          <td>OP_08708</td>
+          <td>Shawn White</td>
+          <td>Account_074</td>
+          <td>MG Ultimate</td>
+          <td>Engaging</td>
+          <td>R$ 96,459</td>
+          <td style="font-weight:700">86</td>
+          <td>85%</td>
+          <td style="font-size:0.85em"></td>
+        </tr>
+        <tr style="background:#fde8e8">
+          <td>28</td>
+          <td>OP_00043</td>
+          <td>Ariel Lewis</td>
+          <td>Account_070</td>
+          <td>GTXPro Plus</td>
+          <td>Engaging</td>
+          <td>R$ 33,147</td>
+          <td style="font-weight:700">86</td>
+          <td>85%</td>
+          <td style="font-size:0.85em"></td>
+        </tr>
+        <tr style="background:#fde8e8">
+          <td>29</td>
+          <td>OP_06785</td>
+          <td>Corey King</td>
+          <td>Account_061</td>
+          <td>MG Ultimate</td>
+          <td>Engaging</td>
+          <td>—</td>
+          <td style="font-weight:700">86</td>
+          <td>85%</td>
+          <td style="font-size:0.85em">🧊 Inativo há 160d | 💰 Produto premium (MG Ultimate) sem valor confirmado</td>
+        </tr>
+        <tr style="background:#fde8e8">
+          <td>30</td>
+          <td>OP_00088</td>
+          <td>Drew Miller</td>
+          <td>Account_070</td>
+          <td>MG Advanced</td>
+          <td>Engaging</td>
+          <td>R$ 72,701</td>
+          <td style="font-weight:700">86</td>
+          <td>85%</td>
+          <td style="font-size:0.85em"></td>
+        </tr>
+        <tr style="background:#fde8e8">
+          <td>31</td>
+          <td>OP_01702</td>
+          <td>Reese Lopez</td>
+          <td>Account_045</td>
+          <td>MG Ultimate</td>
+          <td>Engaging</td>
+          <td>R$ 95,792</td>
+          <td style="font-weight:700">86</td>
+          <td>85%</td>
+          <td style="font-size:0.85em"></td>
+        </tr>
+        <tr style="background:#fde8e8">
+          <td>32</td>
+          <td>OP_02860</td>
+          <td>Jamie Wright</td>
+          <td>Account_021</td>
+          <td>MG Special</td>
+          <td>Engaging</td>
+          <td>R$ 49,549</td>
+          <td style="font-weight:700">86</td>
+          <td>85%</td>
+          <td style="font-size:0.85em"></td>
+        </tr>
+        <tr style="background:#fde8e8">
+          <td>33</td>
+          <td>OP_01831</td>
+          <td>Reese Lopez</td>
+          <td>Account_021</td>
+          <td>MG Ultimate</td>
+          <td>Engaging</td>
+          <td>—</td>
+          <td style="font-weight:700">86</td>
+          <td>85%</td>
+          <td style="font-size:0.85em">💰 Produto premium (MG Ultimate) sem valor confirmado</td>
+        </tr>
+        <tr style="background:#fde8e8">
+          <td>34</td>
+          <td>OP_06306</td>
+          <td>Bailey Allen</td>
+          <td>Account_016</td>
+          <td>MG Special</td>
+          <td>Engaging</td>
+          <td>R$ 37,497</td>
+          <td style="font-weight:700">85</td>
+          <td>84%</td>
+          <td style="font-size:0.85em"></td>
+        </tr>
+        <tr style="background:#fde8e8">
+          <td>35</td>
+          <td>OP_04891</td>
+          <td>Peyton Harris</td>
+          <td>Account_038</td>
+          <td>MG Ultimate</td>
+          <td>Engaging</td>
+          <td>—</td>
+          <td style="font-weight:700">85</td>
+          <td>84%</td>
+          <td style="font-size:0.85em">🧊 Inativo há 192d | 💰 Produto premium (MG Ultimate) sem valor confirmado</td>
+        </tr>
+        <tr style="background:#fde8e8">
+          <td>36</td>
+          <td>OP_04327</td>
+          <td>Corey King</td>
+          <td>Account_032</td>
+          <td>MG Advanced</td>
+          <td>Engaging</td>
+          <td>—</td>
+          <td style="font-weight:700">85</td>
+          <td>85%</td>
+          <td style="font-size:0.85em">💰 Produto premium (MG Advanced) sem valor confirmado</td>
+        </tr>
+        <tr style="background:#fde8e8">
+          <td>37</td>
+          <td>OP_03717</td>
+          <td>Elliot Robinson</td>
+          <td>Account_015</td>
+          <td>MG Advanced</td>
+          <td>Engaging</td>
+          <td>R$ 59,620</td>
+          <td style="font-weight:700">85</td>
+          <td>84%</td>
+          <td style="font-size:0.85em"></td>
+        </tr>
+        <tr style="background:#fde8e8">
+          <td>38</td>
+          <td>OP_00293</td>
+          <td>Peyton Harris</td>
+          <td>Account_032</td>
+          <td>MG Ultimate</td>
+          <td>Engaging</td>
+          <td>R$ 101,772</td>
+          <td style="font-weight:700">85</td>
+          <td>84%</td>
+          <td style="font-size:0.85em">🧊 Inativo há 154d</td>
+        </tr>
+        <tr style="background:#fde8e8">
+          <td>39</td>
+          <td>OP_02453</td>
+          <td>Ariel Lewis</td>
+          <td>Account_032</td>
+          <td>MG Advanced</td>
+          <td>Engaging</td>
+          <td>R$ 40,410</td>
+          <td style="font-weight:700">85</td>
+          <td>84%</td>
+          <td style="font-size:0.85em"></td>
+        </tr>
+        <tr style="background:#fde8e8">
+          <td>40</td>
+          <td>OP_07879</td>
+          <td>Bailey Allen</td>
+          <td>Account_038</td>
+          <td>GTXPro Plus</td>
+          <td>Engaging</td>
+          <td>R$ 47,921</td>
+          <td style="font-weight:700">85</td>
+          <td>84%</td>
+          <td style="font-size:0.85em">🧊 Inativo há 115d</td>
+        </tr>
+        <tr style="background:#fde8e8">
+          <td>41</td>
+          <td>OP_05691</td>
+          <td>Carter Ramirez</td>
+          <td>Account_038</td>
+          <td>MG Advanced</td>
+          <td>Engaging</td>
+          <td>—</td>
+          <td style="font-weight:700">85</td>
+          <td>84%</td>
+          <td style="font-size:0.85em">🧊 Inativo há 199d | 💰 Produto premium (MG Advanced) sem valor confirmado</td>
+        </tr>
+        <tr style="background:#fde8e8">
+          <td>42</td>
+          <td>OP_01601</td>
+          <td>Corey King</td>
+          <td>Account_016</td>
+          <td>MG Special</td>
+          <td>Engaging</td>
+          <td>—</td>
+          <td style="font-weight:700">85</td>
+          <td>84%</td>
+          <td style="font-size:0.85em">🧊 Inativo há 133d | 💰 Produto premium (MG Special) sem valor confirmado</td>
+        </tr>
+        <tr style="background:#fde8e8">
+          <td>43</td>
+          <td>OP_04468</td>
+          <td>Spencer Walker</td>
+          <td>Account_011</td>
+          <td>GTXPro Plus</td>
+          <td>Engaging</td>
+          <td>R$ 29,901</td>
+          <td style="font-weight:700">85</td>
+          <td>84%</td>
+          <td style="font-size:0.85em"></td>
+        </tr>
+        <tr style="background:#fde8e8">
+          <td>44</td>
+          <td>OP_03401</td>
+          <td>Devon Perez</td>
+          <td>Account_056</td>
+          <td>GTXPro Plus</td>
+          <td>Engaging</td>
+          <td>R$ 47,018</td>
+          <td style="font-weight:700">84</td>
+          <td>84%</td>
+          <td style="font-size:0.85em">🧊 Inativo há 357d</td>
+        </tr>
+        <tr style="background:#fde8e8">
+          <td>45</td>
+          <td>OP_00327</td>
+          <td>Bailey Allen</td>
+          <td>Account_070</td>
+          <td>MG Ultimate</td>
+          <td>Engaging</td>
+          <td>R$ 107,426</td>
+          <td style="font-weight:700">84</td>
+          <td>84%</td>
+          <td style="font-size:0.85em">🧊 Inativo há 307d</td>
+        </tr>
+        <tr style="background:#fde8e8">
+          <td>46</td>
+          <td>OP_02492</td>
+          <td>Ariel Lewis</td>
+          <td>Account_044</td>
+          <td>MG Ultimate</td>
+          <td>Engaging</td>
+          <td>—</td>
+          <td style="font-weight:700">84</td>
+          <td>84%</td>
+          <td style="font-size:0.85em">💰 Produto premium (MG Ultimate) sem valor confirmado</td>
+        </tr>
+        <tr style="background:#fde8e8">
+          <td>47</td>
+          <td>OP_04288</td>
+          <td>Peyton Harris</td>
+          <td>Account_061</td>
+          <td>MG Ultimate</td>
+          <td>Engaging</td>
+          <td>R$ 65,672</td>
+          <td style="font-weight:700">84</td>
+          <td>83%</td>
+          <td style="font-size:0.85em">🧊 Inativo há 123d</td>
+        </tr>
+        <tr style="background:#fde8e8">
+          <td>48</td>
+          <td>OP_05604</td>
+          <td>Reese Lopez</td>
+          <td>Account_067</td>
+          <td>MG Ultimate</td>
+          <td>Engaging</td>
+          <td>R$ 72,680</td>
+          <td style="font-weight:700">84</td>
+          <td>83%</td>
+          <td style="font-size:0.85em"></td>
+        </tr>
+        <tr style="background:#fde8e8">
+          <td>49</td>
+          <td>OP_02154</td>
+          <td>Charlie Young</td>
+          <td>Account_079</td>
+          <td>MG Ultimate</td>
+          <td>Engaging</td>
+          <td>—</td>
+          <td style="font-weight:700">84</td>
+          <td>83%</td>
+          <td style="font-size:0.85em">💰 Produto premium (MG Ultimate) sem valor confirmado</td>
+        </tr>
+        <tr style="background:#fde8e8">
+          <td>50</td>
+          <td>OP_04418</td>
+          <td>Ariel Lewis</td>
+          <td>Account_032</td>
+          <td>MG Special</td>
+          <td>Engaging</td>
+          <td>R$ 64,790</td>
+          <td style="font-weight:700">84</td>
+          <td>83%</td>
+          <td style="font-size:0.85em"></td>
+        </tr></tbody>
+  </table>
+</div>
+
+<div class="footer">Lead Scorer · G4 AI Master Challenge 003</div>
+
+<script>
+const charts = {"hist": "{\"data\":[{\"bingroup\":\"x\",\"hovertemplate\":\"Score=%{x}\\u003cbr\\u003ecount=%{y}\\u003cextra\\u003e\\u003c\\u002fextra\\u003e\",\"legendgroup\":\"\",\"marker\":{\"color\":\"#3498db\",\"pattern\":{\"shape\":\"\"}},\"name\":\"\",\"nbinsx\":25,\"orientation\":\"v\",\"showlegend\":false,\"x\":{\"dtype\":\"f8\",\"bdata\":\"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AAAACBTQAAAAAAAIFNAAAAAAAAgU0AAAAAAACBTQAAAAAAAIFNAAAAAAAAgU0AAAAAAACBTQAAAAAAAIFNAAAAAAAAgU0AAAAAAACBTQAAAAAAAIFNAmpmZmZkZU0CamZmZmRlTQJqZmZmZGVNAmpmZmZkZU0CamZmZmRlTQJqZmZmZGVNAmpmZmZkZU0CamZmZmRlTQJqZmZmZGVNAmpmZmZkZU0AzMzMzMxNTQDMzMzMzE1NAMzMzMzMTU0AzMzMzMxNTQM3MzMzMDFNAzczMzMwMU0DNzMzMzAxTQM3MzMzMDFNAzczMzMwMU0DNzMzMzAxTQM3MzMzMDFNAzczMzMwMU0DNzMzMzAxTQM3MzMzMDFNAZmZmZmYGU0BmZmZmZgZTQGZmZmZmBlNAZmZmZmYGU0BmZmZmZgZTQGZmZmZmBlNAZmZmZmYGU0BmZmZmZgZTQGZmZmZmBlNAAAAAAAAAU0AAAAAAAABTQAAAAAAAAFNAAAAAAAAAU0AAAAAAAABTQAAAAAAAAFNAmpmZmZn5UkCamZmZmflSQJqZmZmZ+VJAmpmZmZn5UkCamZmZmflSQJqZmZmZ+VJAmpmZmZn5UkCamZmZmflSQJqZmZmZ+VJAmpmZmZn5UkCamZmZmflSQJqZmZmZ+VJAmpmZmZn5UkCamZmZmflSQDMzMzMz81JAMzMzMzPzUkAzMzMzM\\u002fNSQDMzMzMz81JAMzMzMzPzUkAzMzMzM\\u002fNSQDMzMzMz81JAMzMzMzPzUkAzMzMzM\\u002fNSQM3MzMzM7FJAzczMzMzsUkDNzMzMzOxSQM3MzMzM7FJAzczMzMzsUkDNzMzMzOxSQM3MzMzM7FJAzczMzMzsUkDNzMzMzOxSQM3MzMzM7FJAZmZmZmbmUkBmZmZmZuZSQGZmZmZm5lJAZmZmZmbmUkBmZmZmZuZSQGZmZmZm5lJAZmZmZmbmUkBmZmZmZuZSQGZmZmZm5lJAZmZmZmbmUkBmZmZmZuZSQAAAAAAA4FJAAAAAAADgUkAAAAAAAOBSQAAAAAAA4FJAAAAAAADgUkAAAAAAAOBSQAAAAAAA4FJAAAAAAADgUkAAAAAAAOBSQJqZmZmZ2VJAmpmZmZnZUkCamZmZmdlSQJqZmZmZ2VJAmpmZmZnZUkCamZmZmdlSQJqZmZmZ2VJAmpmZmZnZUkCamZmZmdlSQJqZmZmZ2VJAmpmZmZnZUkCamZmZmdlSQJqZmZmZ2VJAmpmZmZnZUkCamZmZmdlSQJqZmZmZ2VJAmpmZmZnZUkAzMzMzM9NSQDMzMzMz01JAMzMzMzPTUkAzMzMzM9NSQDMzMzMz01JAMzMzMzPTUkAzMzMzM9NSQDMzMzMz01JAMzMzMzPTUkAzMzMzM9NSQDMzMzMz01JAMzMzMzPTUkAzMzMzM9NSQDMzMzMz01JAMzMzMzPTUkDNzMzMzMxSQM3MzMzMzFJAzczMzMzMUkDNzMzMzMxSQM3MzMzMzFJAzczMzMzMUkDNzMzMzMxSQM3MzMzMzFJAzczMzMzMUkDNzMzMzMxSQM3MzMzMzFJAzczMzMzMUkBmZmZmZsZSQGZmZmZmxlJAZmZmZmbGUkBmZmZmZsZSQGZmZmZmxlJAZmZmZmbGUkBmZmZmZsZSQGZmZmZmxlJAZmZmZmbGUkBmZmZmZsZSQAAAAAAAwFJAAAAAAADAUkAAAAAAAMBSQAAAAAAAwFJAAAAAAADAUkAAAAAAAMBSQAAAAAAAwFJAAAAAAADAUkAAAAAAAMBSQAAAAAAAwFJAAAAAAADAUkAAAAAAAMBSQAAAAAAAwFJAmpmZmZm5UkCamZmZmblSQJqZmZmZuVJAmpmZmZm5UkCamZmZmblSQJqZmZmZuVJAmpmZmZm5UkCamZmZmblSQJqZmZmZuVJAmpmZmZm5UkCamZmZmblSQJqZmZmZuVJAmpmZmZm5UkCamZmZmblSQJqZmZmZuVJAMzMzMzOzUkAzMzMzM7NSQDMzMzMzs1JAMzMzMzOzUkAzMzMzM7NSQDMzMzMzs1JAMzMzMzOzUkAzMzMzM7NSQDMzMzMzs1JAMzMzMzOzUkAzMzMzM7NSQDMzMzMzs1JAMzMzMzOzUkDNzMzMzKxSQM3MzMzMrFJAzczMzMysUkDNzMzMzKxSQM3MzMzMrFJAzczMzMysUkDNzMzMzKxSQM3MzMzMrFJAzczMzMysUkDNzMzMzKxSQM3MzMzMrFJAZmZmZmamUkBmZmZmZqZSQGZmZmZmplJAZmZmZmamUkBmZmZmZqZSQGZmZmZmplJAZmZmZmamUkBmZmZmZqZSQGZmZmZmplJAZmZmZmamUkBmZmZmZqZSQGZmZmZmplJAAAAAAACgUkAAAAAAAKBSQAAAAAAAoFJAAAAAAACgUkAAAAAAAKBSQAAAAAAAoFJAAAAAAACgUkAAAAAAAKBSQAAAAAAAoFJAAAAAAACgUkCamZmZmZlSQJqZmZmZmVJAmpmZmZmZUkCamZmZmZlSQJqZmZmZmVJAmpmZmZmZUkCamZmZmZlSQJqZmZmZmVJAmpmZmZmZUkCamZmZmZlSQJqZmZmZmVJAmpmZmZmZUkCamZmZmZlSQJqZmZmZmVJAmpmZmZmZUkCamZmZmZlSQJqZmZmZmVJAMzMzMzOTUkAzMzMzM5NSQDMzMzMzk1JAMzMzMzOTUkAzMzMzM5NSQDMzMzMzk1JAMzMzMzOTUkAzMzMzM5NSQM3MzMzMjFJAzczMzMyMUkDNzMzMzIxSQM3MzMzMjFJAzczMzMyMUkDNzMzMzIxSQM3MzMzMjFJAZmZmZmaGUkBmZmZmZoZSQGZmZmZmhlJAZmZmZmaGUkBmZmZmZoZSQGZmZmZmhlJAZmZmZmaGUkBmZmZmZoZSQGZmZmZmhlJAZmZmZmaGUkBmZmZmZoZSQGZmZmZmhlJAZmZmZmaGUkBmZmZmZoZSQGZmZmZmhlJAZmZmZmaGUkBmZmZmZoZSQGZmZmZmhlJAAAAAAACAUkAAAAAAAIBSQAAAAAAAgFJAAAAAAACAUkAAAAAAAIBSQAAAAAAAgFJAAAAAAACAUkAAAAAAAIBSQAAAAAAAgFJAAAAAAACAUkAAAAAAAIBSQAAAAAAAgFJAAAAAAACAUkAAAAAAAIBSQAAAAAAAgFJAAAAAAACAUkAAAAAAAIBSQAAAAAAAgFJAAAAAAACAUkAAAAAAAIBSQAAAAAAAgFJAAAAAAACAUkAAAAAAAIBSQAAAAAAAgFJAmpmZmZl5UkCamZmZmXlSQJqZmZmZeVJAmpmZmZl5UkCamZmZmXlSQJqZmZmZeVJAmpmZmZl5UkCamZmZmXlSQJqZmZmZeVJAmpmZmZl5UkCamZmZmXlSQJqZmZmZeVJAmpmZmZl5UkCamZmZmXlSQJqZmZmZeVJAMzMzMzNzUkAzMzMzM3NSQDMzMzMzc1JAMzMzMzNzUkAzMzMzM3NSQDMzMzMzc1JAMzMzMzNzUkDNzMzMzGxSQM3MzMzMbFJAzczMzMxsUkDNzMzMzGxSQM3MzMzMbFJAzczMzMxsUkDNzMzMzGxSQM3MzMzMbFJAzczMzMxsUkDNzMzMzGxSQM3MzMzMbFJAzczMzMxsUkDNzMzMzGxSQM3MzMzMbFJAzczMzMxsUkDNzMzMzGxSQGZmZmZmZlJAZmZmZmZmUkBmZmZmZmZSQGZmZmZmZlJAZmZmZmZmUkBmZmZmZmZSQGZmZmZmZlJAZmZmZmZmUkBmZmZmZmZSQGZmZmZmZlJAZmZmZmZmUkBmZmZmZmZSQGZmZmZmZlJAZmZmZmZmUkBmZmZmZmZSQGZmZmZmZlJAZmZmZmZmUkBmZmZmZmZSQGZmZmZmZlJAZmZmZmZmUkBmZmZmZmZSQAAAAAAAYFJAAAAAAABgUkAAAAAAAGBSQAAAAAAAYFJAAAAAAABgUkAAAAAAAGBSQAAAAAAAYFJAAAAAAABgUkAAAAAAAGBSQAAAAAAAYFJAAAAAAABgUkAAAAAAAGBSQJqZmZmZWVJAmpmZmZlZUkCamZmZmVlSQJqZmZmZWVJAmpmZmZlZUkCamZmZmVlSQJqZmZmZWVJAmpmZmZlZUkAzMzMzM1NSQDMzMzMzU1JAMzMzMzNTUkAzMzMzM1NSQDMzMzMzU1JAMzMzMzNTUkAzMzMzM1NSQDMzMzMzU1JAMzMzMzNTUkAzMzMzM1NSQDMzMzMzU1JAzczMzMxMUkDNzMzMzExSQM3MzMzMTFJAzczMzMxMUkDNzMzMzExSQM3MzMzMTFJAzczMzMxMUkDNzMzMzExSQM3MzMzMTFJAzczMzMxMUkDNzMzMzExSQM3MzMzMTFJAzczMzMxMUkDNzMzMzExSQM3MzMzMTFJAzczMzMxMUkDNzMzMzExSQM3MzMzMTFJAzczMzMxMUkBmZmZmZkZSQGZmZmZmRlJAZmZmZmZGUkBmZmZmZkZSQGZmZmZmRlJAZmZmZmZGUkBmZmZmZkZSQGZmZmZmRlJAZmZmZmZGUkBmZmZmZkZSQGZmZmZmRlJAZmZmZmZGUkBmZmZmZkZSQGZmZmZmRlJAZmZmZmZGUkAAAAAAAEBSQAAAAAAAQFJAAAAAAABAUkAAAAAAAEBSQAAAAAAAQFJAAAAAAABAUkAAAAAAAEBSQAAAAAAAQFJAAAAAAABAUkAAAAAAAEBSQAAAAAAAQFJAAAAAAABAUkAAAAAAAEBSQAAAAAAAQFJAAAAAAABAUkAAAAAAAEBSQAAAAAAAQFJAAAAAAABAUkAAAAAAAEBSQAAAAAAAQFJAmpmZmZk5UkCamZmZmTlSQJqZmZmZOVJAmpmZmZk5UkCamZmZmTlSQJqZmZmZOVJAmpmZmZk5UkCamZmZmTlSQJqZmZmZOVJAmpmZmZk5UkCamZmZmTlSQJqZmZmZOVJAmpmZmZk5UkCamZmZmTlSQDMzMzMzM1JAMzMzMzMzUkAzMzMzMzNSQDMzMzMzM1JAMzMzMzMzUkAzMzMzMzNSQDMzMzMzM1JAMzMzMzMzUkAzMzMzMzNSQDMzMzMzM1JAMzMzMzMzUkAzMzMzMzNSQDMzMzMzM1JAMzMzMzMzUkDNzMzMzCxSQM3MzMzMLFJAzczMzMwsUkDNzMzMzCxSQM3MzMzMLFJAzczMzMwsUkDNzMzMzCxSQM3MzMzMLFJAzczMzMwsUkDNzMzMzCxSQM3MzMzMLFJAzczMzMwsUkDNzMzMzCxSQM3MzMzMLFJAzczMzMwsUkDNzMzMzCxSQGZmZmZmJlJAZmZmZmYmUkBmZmZmZiZSQGZmZmZmJlJAZmZmZmYmUkBmZmZmZiZSQGZmZmZmJlJAZmZmZmYmUkBmZmZmZiZSQGZmZmZmJlJAAAAAAAAgUkAAAAAAACBSQAAAAAAAIFJAAAAAAAAgUkAAAAAAACBSQAAAAAAAIFJAAAAAAAAgUkAAAAAAACBSQAAAAAAAIFJAAAAAAAAgUkAAAAAAACBSQAAAAAAAIFJAAAAAAAAgUkAAAAAAACBSQAAAAAAAIFJAAAAAAAAgUkAAAAAAACBSQJqZmZmZGVJAmpmZmZkZUkCamZmZmRlSQJqZmZmZGVJAmpmZmZkZUkCamZmZmRlSQJqZmZmZGVJAmpmZmZkZUkCamZmZmRlSQJqZmZmZGVJAmpmZmZkZUkCamZmZmRlSQJqZmZmZGVJAmpmZmZkZUkAzMzMzMxNSQDMzMzMzE1JAMzMzMzMTUkAzMzMzMxNSQDMzMzMzE1JAMzMzMzMTUkAzMzMzMxNSQDMzMzMzE1JAMzMzMzMTUkAzMzMzMxNSQDMzMzMzE1JAMzMzMzMTUkAzMzMzMxNSQDMzMzMzE1JAMzMzMzMTUkDNzMzMzAxSQM3MzMzMDFJAzczMzMwMUkDNzMzMzAxSQM3MzMzMDFJAzczMzMwMUkDNzMzMzAxSQM3MzMzMDFJAzczMzMwMUkDNzMzMzAxSQM3MzMzMDFJAzczMzMwMUkDNzMzMzAxSQM3MzMzMDFJAzczMzMwMUkDNzMzMzAxSQGZmZmZmBlJAZmZmZmYGUkBmZmZmZgZSQGZmZmZmBlJAZmZmZmYGUkBmZmZmZgZSQGZmZmZmBlJAZmZmZmYGUkBmZmZmZgZSQGZmZmZmBlJAZmZmZmYGUkBmZmZmZgZSQGZmZmZmBlJAAAAAAAAAUkAAAAAAAABSQAAAAAAAAFJAAAAAAAAAUkAAAAAAAABSQAAAAAAAAFJAAAAAAAAAUkAAAAAAAABSQAAAAAAAAFJAAAAAAAAAUkCamZmZmflRQJqZmZmZ+VFAmpmZmZn5UUCamZmZmflRQJqZmZmZ+VFAmpmZmZn5UUCamZmZmflRQJqZmZmZ+VFAmpmZmZn5UUCamZmZmflRQJqZmZmZ+VFAmpmZmZn5UUCamZmZmflRQJqZmZmZ+VFAmpmZmZn5UUCamZmZmflRQJqZmZmZ+VFAmpmZmZn5UUCamZmZmflRQJqZmZmZ+VFAmpmZmZn5UUAzMzMzM\\u002fNRQDMzMzMz81FAMzMzMzPzUUAzMzMzM\\u002fNRQDMzMzMz81FAMzMzMzPzUUAzMzMzM\\u002fNRQDMzMzMz81FAMzMzMzPzUUAzMzMzM\\u002fNRQDMzMzMz81FAzczMzMzsUUDNzMzMzOxRQM3MzMzM7FFAzczMzMzsUUDNzMzMzOxRQM3MzMzM7FFAzczMzMzsUUDNzMzMzOxRQM3MzMzM7FFAzczMzMzsUUDNzMzMzOxRQM3MzMzM7FFAzczMzMzsUUDNzMzMzOxRQM3MzMzM7FFAzczMzMzsUUDNzMzMzOxRQGZmZmZm5lFAZmZmZmbmUUBmZmZmZuZRQGZmZmZm5lFAZmZmZmbmUUBmZmZmZuZRQGZmZmZm5lFAZmZmZmbmUUBmZmZmZuZRQGZmZmZm5lFAZmZmZmbmUUBmZmZmZuZRQGZmZmZm5lFAZmZmZmbmUUAAAAAAAOBRQAAAAAAA4FFAAAAAAADgUUAAAAAAAOBRQAAAAAAA4FFAAAAAAADgUUAAAAAAAOBRQAAAAAAA4FFAAAAAAADgUUAAAAAAAOBRQAAAAAAA4FFAAAAAAADgUUAAAAAAAOBRQAAAAAAA4FFAAAAAAADgUUAAAAAAAOBRQAAAAAAA4FFAAAAAAADgUUCamZmZmdlRQJqZmZmZ2VFAmpmZmZnZUUCamZmZmdlRQJqZmZmZ2VFAmpmZmZnZUUCamZmZmdlRQJqZmZmZ2VFAmpmZmZnZUUCamZmZmdlRQJqZmZmZ2VFAmpmZmZnZUUCamZmZmdlRQJqZmZmZ2VFAmpmZmZnZUUCamZmZmdlRQJqZmZmZ2VFAmpmZmZnZUUCamZmZmdlRQJqZmZmZ2VFAmpmZmZnZUUCamZmZmdlRQJqZmZmZ2VFAMzMzMzPTUUAzMzMzM9NRQDMzMzMz01FAMzMzMzPTUUAzMzMzM9NRQDMzMzMz01FAMzMzMzPTUUAzMzMzM9NRQDMzMzMz01FAMzMzMzPTUUAzMzMzM9NRQDMzMzMz01FAMzMzMzPTUUAzMzMzM9NRQM3MzMzMzFFAzczMzMzMUUDNzMzMzMxRQM3MzMzMzFFAzczMzMzMUUDNzMzMzMxRQM3MzMzMzFFAzczMzMzMUUDNzMzMzMxRQM3MzMzMzFFAzczMzMzMUUDNzMzMzMxRQM3MzMzMzFFAzczMzMzMUUDNzMzMzMxRQM3MzMzMzFFAzczMzMzMUUDNzMzMzMxRQM3MzMzMzFFAzczMzMzMUUDNzMzMzMxRQM3MzMzMzFFAzczMzMzMUUDNzMzMzMxRQGZmZmZmxlFAZmZmZmbGUUBmZmZmZsZRQGZmZmZmxlFAZmZmZmbGUUBmZmZmZsZRQGZmZmZmxlFAZmZmZmbGUUBmZmZmZsZRQGZmZmZmxlFAZmZmZmbGUUBmZmZmZsZRQGZmZmZmxlFAZmZmZmbGUUBmZmZmZsZRQAAAAAAAwFFAAAAAAADAUUAAAAAAAMBRQAAAAAAAwFFAAAAAAADAUUAAAAAAAMBRQAAAAAAAwFFAAAAAAADAUUAAAAAAAMBRQAAAAAAAwFFAAAAAAADAUUAAAAAAAMBRQAAAAAAAwFFAAAAAAADAUUAAAAAAAMBRQAAAAAAAwFFAAAAAAADAUUAAAAAAAMBRQAAAAAAAwFFAmpmZmZm5UUCamZmZmblRQJqZmZmZuVFAmpmZmZm5UUCamZmZmblRQJqZmZmZuVFAmpmZmZm5UUCamZmZmblRQJqZmZmZuVFAmpmZmZm5UUCamZmZmblRQJqZmZmZuVFAmpmZmZm5UUCamZmZmblRQJqZmZmZuVFAmpmZmZm5UUCamZmZmblRQJqZmZmZuVFAMzMzMzOzUUAzMzMzM7NRQDMzMzMzs1FAMzMzMzOzUUAzMzMzM7NRQDMzMzMzs1FAMzMzMzOzUUAzMzMzM7NRQDMzMzMzs1FAMzMzMzOzUUAzMzMzM7NRQDMzMzMzs1FAMzMzMzOzUUAzMzMzM7NRQDMzMzMzs1FAzczMzMysUUDNzMzMzKxRQM3MzMzMrFFAzczMzMysUUDNzMzMzKxRQM3MzMzMrFFAzczMzMysUUDNzMzMzKxRQM3MzMzMrFFAzczMzMysUUDNzMzMzKxRQGZmZmZmplFAZmZmZmamUUBmZmZmZqZRQGZmZmZmplFAZmZmZmamUUBmZmZmZqZRQGZmZmZmplFAZmZmZmamUUBmZmZmZqZRQGZmZmZmplFAAAAAAACgUUAAAAAAAKBRQAAAAAAAoFFAAAAAAACgUUAAAAAAAKBRQAAAAAAAoFFAAAAAAACgUUAAAAAAAKBRQAAAAAAAoFFAAAAAAACgUUAAAAAAAKBRQAAAAAAAoFFAAAAAAACgUUAAAAAAAKBRQAAAAAAAoFFAAAAAAACgUUAAAAAAAKBRQAAAAAAAoFFAAAAAAACgUUCamZmZmZlRQJqZmZmZmVFAmpmZmZmZUUCamZmZmZlRQJqZmZmZmVFAmpmZmZmZUUCamZmZmZlRQJqZmZmZmVFAmpmZmZmZUUCamZmZmZlRQJqZmZmZmVFAmpmZmZmZUUCamZmZmZlRQJqZmZmZmVFAmpmZmZmZUUCamZmZmZlRQJqZmZmZmVFAmpmZmZmZUUAzMzMzM5NRQDMzMzMzk1FAMzMzMzOTUUAzMzMzM5NRQDMzMzMzk1FAMzMzMzOTUUAzMzMzM5NRQDMzMzMzk1FAMzMzMzOTUUAzMzMzM5NRQDMzMzMzk1FAMzMzMzOTUUAzMzMzM5NRQDMzMzMzk1FAMzMzMzOTUUAzMzMzM5NRQDMzMzMzk1FAzczMzMyMUUDNzMzMzIxRQM3MzMzMjFFAzczMzMyMUUDNzMzMzIxRQM3MzMzMjFFAzczMzMyMUUDNzMzMzIxRQM3MzMzMjFFAzczMzMyMUUDNzMzMzIxRQM3MzMzMjFFAzczMzMyMUUDNzMzMzIxRQM3MzMzMjFFAzczMzMyMUUDNzMzMzIxRQM3MzMzMjFFAzczMzMyMUUDNzMzMzIxRQGZmZmZmhlFAZmZmZmaGUUBmZmZmZoZRQGZmZmZmhlFAZmZmZmaGUUBmZmZmZoZRQGZmZmZmhlFAZmZmZmaGUUBmZmZmZoZRQGZmZmZmhlFAZmZmZmaGUUBmZmZmZoZRQGZmZmZmhlFAZmZmZmaGUUBmZmZmZoZRQGZmZmZmhlFAZmZmZmaGUUBmZmZmZoZRQGZmZmZmhlFAZmZmZmaGUUBmZmZmZoZRQGZmZmZmhlFAAAAAAACAUUAAAAAAAIBRQAAAAAAAgFFAAAAAAACAUUAAAAAAAIBRQAAAAAAAgFFAAAAAAACAUUAAAAAAAIBRQAAAAAAAgFFAAAAAAACAUUAAAAAAAIBRQAAAAAAAgFFAAAAAAACAUUAAAAAAAIBRQAAAAAAAgFFAAAAAAACAUUAAAAAAAIBRQAAAAAAAgFFAAAAAAACAUUCamZmZmXlRQJqZmZmZeVFAmpmZmZl5UUCamZmZmXlRQJqZmZmZeVFAmpmZmZl5UUCamZmZmXlRQJqZmZmZeVFAmpmZmZl5UUCamZmZmXlRQJqZmZmZeVFAmpmZmZl5UUCamZmZmXlRQJqZmZmZeVFAmpmZmZl5UUCamZmZmXlRQJqZmZmZeVFAmpmZmZl5UUCamZmZmXlRQJqZmZmZeVFAmpmZmZl5UUCamZmZmXlRQJqZmZmZeVFAmpmZmZl5UUAzMzMzM3NRQDMzMzMzc1FAMzMzMzNzUUAzMzMzM3NRQDMzMzMzc1FAMzMzMzNzUUAzMzMzM3NRQDMzMzMzc1FAMzMzMzNzUUAzMzMzM3NRQDMzMzMzc1FAMzMzMzNzUUAzMzMzM3NRQDMzMzMzc1FAMzMzMzNzUUAzMzMzM3NRQDMzMzMzc1FAMzMzMzNzUUAzMzMzM3NRQM3MzMzMbFFAzczMzMxsUUDNzMzMzGxRQM3MzMzMbFFAzczMzMxsUUDNzMzMzGxRQM3MzMzMbFFAzczMzMxsUUDNzMzMzGxRQM3MzMzMbFFAzczMzMxsUUDNzMzMzGxRQM3MzMzMbFFAzczMzMxsUUDNzMzMzGxRQM3MzMzMbFFAzczMzMxsUUBmZmZmZmZRQGZmZmZmZlFAZmZmZmZmUUBmZmZmZmZRQGZmZmZmZlFAZmZmZmZmUUBmZmZmZmZRQGZmZmZmZlFAZmZmZmZmUUBmZmZmZmZRQGZmZmZmZlFAZmZmZmZmUUBmZmZmZmZRQGZmZmZmZlFAZmZmZmZmUUBmZmZmZmZRQGZmZmZmZlFAAAAAAABgUUAAAAAAAGBRQAAAAAAAYFFAAAAAAABgUUAAAAAAAGBRQAAAAAAAYFFAAAAAAABgUUAAAAAAAGBRQAAAAAAAYFFAAAAAAABgUUAAAAAAAGBRQAAAAAAAYFFAAAAAAABgUUAAAAAAAGBRQAAAAAAAYFFAAAAAAABgUUAAAAAAAGBRQJqZmZmZWVFAmpmZmZlZUUCamZmZmVlRQJqZmZmZWVFAmpmZmZlZUUCamZmZmVlRQJqZmZmZWVFAmpmZmZlZUUCamZmZmVlRQJqZmZmZWVFAmpmZmZlZUUCamZmZmVlRQJqZmZmZWVFAmpmZmZlZUUCamZmZmVlRQJqZmZmZWVFAmpmZmZlZUUCamZmZmVlRQJqZmZmZWVFAmpmZmZlZUUCamZmZmVlRQJqZmZmZWVFAMzMzMzNTUUAzMzMzM1NRQDMzMzMzU1FAMzMzMzNTUUAzMzMzM1NRQDMzMzMzU1FAMzMzMzNTUUAzMzMzM1NRQDMzMzMzU1FAMzMzMzNTUUDNzMzMzExRQM3MzMzMTFFAzczMzMxMUUDNzMzMzExRQM3MzMzMTFFAzczMzMxMUUDNzMzMzExRQM3MzMzMTFFAzczMzMxMUUDNzMzMzExRQM3MzMzMTFFAzczMzMxMUUDNzMzMzExRQM3MzMzMTFFAzczMzMxMUUDNzMzMzExRQM3MzMzMTFFAZmZmZmZGUUBmZmZmZkZRQGZmZmZmRlFAZmZmZmZGUUBmZmZmZkZRQGZmZmZmRlFAZmZmZmZGUUBmZmZmZkZRQGZmZmZmRlFAZmZmZmZGUUBmZmZmZkZRQGZmZmZmRlFAZmZmZmZGUUBmZmZmZkZRQAAAAAAAQFFAAAAAAABAUUAAAAAAAEBRQAAAAAAAQFFAAAAAAABAUUAAAAAAAEBRQAAAAAAAQFFAAAAAAABAUUAAAAAAAEBRQAAAAAAAQFFAAAAAAABAUUAAAAAAAEBRQAAAAAAAQFFAAAAAAABAUUAAAAAAAEBRQAAAAAAAQFFAAAAAAABAUUAAAAAAAEBRQAAAAAAAQFFAAAAAAABAUUAAAAAAAEBRQAAAAAAAQFFAAAAAAABAUUAAAAAAAEBRQAAAAAAAQFFAAAAAAABAUUCamZmZmTlRQJqZmZmZOVFAmpmZmZk5UUCamZmZmTlRQJqZmZmZOVFAmpmZmZk5UUCamZmZmTlRQJqZmZmZOVFAmpmZmZk5UUCamZmZmTlRQJqZmZmZOVFAmpmZmZk5UUCamZmZmTlRQJqZmZmZOVFAmpmZmZk5UUCamZmZmTlRQJqZmZmZOVFAmpmZmZk5UUCamZmZmTlRQJqZmZmZOVFAmpmZmZk5UUAzMzMzMzNRQDMzMzMzM1FAMzMzMzMzUUAzMzMzMzNRQDMzMzMzM1FAMzMzMzMzUUAzMzMzMzNRQDMzMzMzM1FAMzMzMzMzUUAzMzMzMzNRQDMzMzMzM1FAMzMzMzMzUUAzMzMzMzNRQDMzMzMzM1FAMzMzMzMzUUAzMzMzMzNRQDMzMzMzM1FAMzMzMzMzUUAzMzMzMzNRQDMzMzMzM1FAMzMzMzMzUUAzMzMzMzNRQDMzMzMzM1FAMzMzMzMzUUAzMzMzMzNRQM3MzMzMLFFAzczMzMwsUUDNzMzMzCxRQM3MzMzMLFFAzczMzMwsUUDNzMzMzCxRQM3MzMzMLFFAzczMzMwsUUDNzMzMzCxRQM3MzMzMLFFAzczMzMwsUUDNzMzMzCxRQM3MzMzMLFFAzczMzMwsUUDNzMzMzCxRQM3MzMzMLFFAzczMzMwsUUDNzMzMzCxRQM3MzMzMLFFAzczMzMwsUUDNzMzMzCxRQM3MzMzMLFFAzczMzMwsUUDNzMzMzCxRQM3MzMzMLFFAzczMzMwsUUDNzMzMzCxRQM3MzMzMLFFAzczMzMwsUUDNzMzMzCxRQM3MzMzMLFFAzczMzMwsUUDNzMzMzCxRQM3MzMzMLFFAzczMzMwsUUDNzMzMzCxRQGZmZmZmJlFAZmZmZmYmUUBmZmZmZiZRQGZmZmZmJlFAZmZmZmYmUUBmZmZmZiZRQGZmZmZmJlFAZmZmZmYmUUBmZmZmZiZRQGZmZmZmJlFAZmZmZmYmUUBmZmZmZiZRQGZmZmZmJlFAAAAAAAAgUUAAAAAAACBRQAAAAAAAIFFAAAAAAAAgUUAAAAAAACBRQAAAAAAAIFFAAAAAAAAgUUAAAAAAACBRQAAAAAAAIFFAAAAAAAAgUUAAAAAAACBRQAAAAAAAIFFAAAAAAAAgUUAAAAAAACBRQAAAAAAAIFFAAAAAAAAgUUAAAAAAACBRQAAAAAAAIFFAAAAAAAAgUUAAAAAAACBRQAAAAAAAIFFAAAAAAAAgUUAAAAAAACBRQAAAAAAAIFFAAAAAAAAgUUAAAAAAACBRQAAAAAAAIFFAAAAAAAAgUUAAAAAAACBRQJqZmZmZGVFAmpmZmZkZUUCamZmZmRlRQJqZmZmZGVFAmpmZmZkZUUCamZmZmRlRQJqZmZmZGVFAmpmZmZkZUUCamZmZmRlRQJqZmZmZGVFAmpmZmZkZUUCamZmZmRlRQJqZmZmZGVFAmpmZmZkZUUCamZmZmRlRQJqZmZmZGVFAmpmZmZkZUUCamZmZmRlRQJqZmZmZGVFAmpmZmZkZUUCamZmZmRlRQJqZmZmZGVFAmpmZmZkZUUCamZmZmRlRQJqZmZmZGVFAmpmZmZkZUUCamZmZmRlRQJqZmZmZGVFAMzMzMzMTUUAzMzMzMxNRQDMzMzMzE1FAMzMzMzMTUUAzMzMzMxNRQDMzMzMzE1FAMzMzMzMTUUAzMzMzMxNRQDMzMzMzE1FAMzMzMzMTUUAzMzMzMxNRQDMzMzMzE1FAMzMzMzMTUUAzMzMzMxNRQDMzMzMzE1FAzczMzMwMUUDNzMzMzAxRQM3MzMzMDFFAzczMzMwMUUDNzMzMzAxRQM3MzMzMDFFAzczMzMwMUUDNzMzMzAxRQM3MzMzMDFFAzczMzMwMUUDNzMzMzAxRQM3MzMzMDFFAzczMzMwMUUDNzMzMzAxRQM3MzMzMDFFAzczMzMwMUUDNzMzMzAxRQM3MzMzMDFFAzczMzMwMUUBmZmZmZgZRQGZmZmZmBlFAZmZmZmYGUUBmZmZmZgZRQGZmZmZmBlFAZmZmZmYGUUBmZmZmZgZRQGZmZmZmBlFAZmZmZmYGUUBmZmZmZgZRQGZmZmZmBlFAZmZmZmYGUUBmZmZmZgZRQGZmZmZmBlFAZmZmZmYGUUBmZmZmZgZRQAAAAAAAAFFAAAAAAAAAUUAAAAAAAABRQAAAAAAAAFFAAAAAAAAAUUAAAAAAAABRQAAAAAAAAFFAAAAAAAAAUUAAAAAAAABRQAAAAAAAAFFAAAAAAAAAUUAAAAAAAABRQAAAAAAAAFFAAAAAAAAAUUAAAAAAAABRQAAAAAAAAFFAAAAAAAAAUUAAAAAAAABRQAAAAAAAAFFAAAAAAAAAUUAAAAAAAABRQJqZmZmZ+VBAmpmZmZn5UECamZmZmflQQJqZmZmZ+VBAmpmZmZn5UECamZmZmflQQJqZmZmZ+VBAmpmZmZn5UECamZmZmflQQJqZmZmZ+VBAmpmZmZn5UECamZmZmflQQJqZmZmZ+VBAmpmZmZn5UECamZmZmflQQJqZmZmZ+VBAmpmZmZn5UECamZmZmflQQJqZmZmZ+VBAmpmZmZn5UECamZmZmflQQJqZmZmZ+VBAmpmZmZn5UECamZmZmflQQDMzMzMz81BAMzMzMzPzUEAzMzMzM\\u002fNQQDMzMzMz81BAMzMzMzPzUEAzMzMzM\\u002fNQQDMzMzMz81BAMzMzMzPzUEAzMzMzM\\u002fNQQDMzMzMz81BAMzMzMzPzUEAzMzMzM\\u002fNQQDMzMzMz81BAMzMzMzPzUEAzMzMzM\\u002fNQQDMzMzMz81BAMzMzMzPzUEAzMzMzM\\u002fNQQDMzMzMz81BAMzMzMzPzUEAzMzMzM\\u002fNQQDMzMzMz81BAzczMzMzsUEDNzMzMzOxQQM3MzMzM7FBAzczMzMzsUEDNzMzMzOxQQM3MzMzM7FBAzczMzMzsUEDNzMzMzOxQQM3MzMzM7FBAzczMzMzsUEDNzMzMzOxQQM3MzMzM7FBAzczMzMzsUEDNzMzMzOxQQM3MzMzM7FBAZmZmZmbmUEBmZmZmZuZQQGZmZmZm5lBAZmZmZmbmUEBmZmZmZuZQQGZmZmZm5lBAZmZmZmbmUEBmZmZmZuZQQGZmZmZm5lBAZmZmZmbmUEBmZmZmZuZQQGZmZmZm5lBAZmZmZmbmUEBmZmZmZuZQQGZmZmZm5lBAZmZmZmbmUEBmZmZmZuZQQGZmZmZm5lBAZmZmZmbmUEBmZmZmZuZQQGZmZmZm5lBAZmZmZmbmUEBmZmZmZuZQQGZmZmZm5lBAAAAAAADgUEAAAAAAAOBQQAAAAAAA4FBAAAAAAADgUEAAAAAAAOBQQAAAAAAA4FBAAAAAAADgUEAAAAAAAOBQQAAAAAAA4FBAAAAAAADgUEAAAAAAAOBQQAAAAAAA4FBAAAAAAADgUEAAAAAAAOBQQAAAAAAA4FBAAAAAAADgUEAAAAAAAOBQQJqZmZmZ2VBAmpmZmZnZUECamZmZmdlQQJqZmZmZ2VBAmpmZmZnZUECamZmZmdlQQJqZmZmZ2VBAmpmZmZnZUECamZmZmdlQQJqZmZmZ2VBAmpmZmZnZUECamZmZmdlQQJqZmZmZ2VBAmpmZmZnZUECamZmZmdlQQJqZmZmZ2VBAmpmZmZnZUECamZmZmdlQQJqZmZmZ2VBAmpmZmZnZUECamZmZmdlQQDMzMzMz01BAMzMzMzPTUEAzMzMzM9NQQDMzMzMz01BAMzMzMzPTUEAzMzMzM9NQQDMzMzMz01BAMzMzMzPTUEAzMzMzM9NQQDMzMzMz01BAMzMzMzPTUEAzMzMzM9NQQDMzMzMz01BAMzMzMzPTUEAzMzMzM9NQQDMzMzMz01BAMzMzMzPTUEAzMzMzM9NQQDMzMzMz01BAMzMzMzPTUEAzMzMzM9NQQDMzMzMz01BAMzMzMzPTUEAzMzMzM9NQQDMzMzMz01BAMzMzMzPTUEAzMzMzM9NQQDMzMzMz01BAMzMzMzPTUEAzMzMzM9NQQDMzMzMz01BAzczMzMzMUEDNzMzMzMxQQM3MzMzMzFBAzczMzMzMUEDNzMzMzMxQQM3MzMzMzFBAzczMzMzMUEDNzMzMzMxQQM3MzMzMzFBAzczMzMzMUEDNzMzMzMxQQM3MzMzMzFBAzczMzMzMUEDNzMzMzMxQQGZmZmZmxlBAZmZmZmbGUEBmZmZmZsZQQGZmZmZmxlBAZmZmZmbGUEBmZmZmZsZQQGZmZmZmxlBAZmZmZmbGUEBmZmZmZsZQQGZmZmZmxlBAZmZmZmbGUEBmZmZmZsZQQGZmZmZmxlBAZmZmZmbGUEBmZmZmZsZQQGZmZmZmxlBAZmZmZmbGUEBmZmZmZsZQQGZmZmZmxlBAZmZmZmbGUEBmZmZmZsZQQGZmZmZmxlBAZmZmZmbGUEBmZmZmZsZQQGZmZmZmxlBAAAAAAADAUEAAAAAAAMBQQAAAAAAAwFBAAAAAAADAUEAAAAAAAMBQQAAAAAAAwFBAAAAAAADAUEAAAAAAAMBQQAAAAAAAwFBAAAAAAADAUEAAAAAAAMBQQAAAAAAAwFBAAAAAAADAUECamZmZmblQQJqZmZmZuVBAmpmZmZm5UECamZmZmblQQJqZmZmZuVBAmpmZmZm5UECamZmZmblQQJqZmZmZuVBAmpmZmZm5UECamZmZmblQQJqZmZmZuVBAmpmZmZm5UECamZmZmblQQJqZmZmZuVBAmpmZmZm5UECamZmZmblQQJqZmZmZuVBAmpmZmZm5UECamZmZmblQQDMzMzMzs1BAMzMzMzOzUEAzMzMzM7NQQDMzMzMzs1BAMzMzMzOzUEAzMzMzM7NQQDMzMzMzs1BAMzMzMzOzUEAzMzMzM7NQQDMzMzMzs1BAMzMzMzOzUEAzMzMzM7NQQDMzMzMzs1BAMzMzMzOzUEAzMzMzM7NQQDMzMzMzs1BAzczMzMysUEDNzMzMzKxQQM3MzMzMrFBAzczMzMysUEDNzMzMzKxQQM3MzMzMrFBAzczMzMysUEDNzMzMzKxQQM3MzMzMrFBAzczMzMysUEDNzMzMzKxQQM3MzMzMrFBAzczMzMysUEDNzMzMzKxQQGZmZmZmplBAZmZmZmamUEBmZmZmZqZQQGZmZmZmplBAZmZmZmamUEBmZmZmZqZQQGZmZmZmplBAZmZmZmamUEBmZmZmZqZQQGZmZmZmplBAZmZmZmamUEBmZmZmZqZQQGZmZmZmplBAZmZmZmamUEBmZmZmZqZQQGZmZmZmplBAZmZmZmamUEBmZmZmZqZQQGZmZmZmplBAZmZmZmamUEBmZmZmZqZQQAAAAAAAoFBAAAAAAACgUEAAAAAAAKBQQAAAAAAAoFBAAAAAAACgUEAAAAAAAKBQQAAAAAAAoFBAAAAAAACgUEAAAAAAAKBQQAAAAAAAoFBAAAAAAACgUEAAAAAAAKBQQJqZmZmZmVBAmpmZmZmZUECamZmZmZlQQJqZmZmZmVBAmpmZmZmZUECamZmZmZlQQJqZmZmZmVBAmpmZmZmZUECamZmZmZlQQJqZmZmZmVBAmpmZmZmZUECamZmZmZlQQJqZmZmZmVBAmpmZmZmZUECamZmZmZlQQJqZmZmZmVBAmpmZmZmZUECamZmZmZlQQJqZmZmZmVBAmpmZmZmZUECamZmZmZlQQJqZmZmZmVBAmpmZmZmZUECamZmZmZlQQJqZmZmZmVBAmpmZmZmZUECamZmZmZlQQDMzMzMzk1BAMzMzMzOTUEAzMzMzM5NQQDMzMzMzk1BAMzMzMzOTUEAzMzMzM5NQQDMzMzMzk1BAMzMzMzOTUEAzMzMzM5NQQDMzMzMzk1BAMzMzMzOTUEAzMzMzM5NQQDMzMzMzk1BAMzMzMzOTUEAzMzMzM5NQQDMzMzMzk1BAMzMzMzOTUEAzMzMzM5NQQDMzMzMzk1BAzczMzMyMUEDNzMzMzIxQQM3MzMzMjFBAzczMzMyMUEDNzMzMzIxQQM3MzMzMjFBAzczMzMyMUEDNzMzMzIxQQM3MzMzMjFBAzczMzMyMUEDNzMzMzIxQQM3MzMzMjFBAzczMzMyMUEDNzMzMzIxQQM3MzMzMjFBAzczMzMyMUEDNzMzMzIxQQM3MzMzMjFBAzczMzMyMUEBmZmZmZoZQQGZmZmZmhlBAZmZmZmaGUEBmZmZmZoZQQGZmZmZmhlBAZmZmZmaGUEBmZmZmZoZQQGZmZmZmhlBAZmZmZmaGUEBmZmZmZoZQQGZmZmZmhlBAZmZmZmaGUEBmZmZmZoZQQGZmZmZmhlBAZmZmZmaGUEBmZmZmZoZQQGZmZmZmhlBAZmZmZmaGUEAAAAAAAIBQQAAAAAAAgFBAAAAAAACAUEAAAAAAAIBQQAAAAAAAgFBAAAAAAACAUEAAAAAAAIBQQAAAAAAAgFBAAAAAAACAUEAAAAAAAIBQQAAAAAAAgFBAAAAAAACAUEAAAAAAAIBQQAAAAAAAgFBAAAAAAACAUEAAAAAAAIBQQAAAAAAAgFBAAAAAAACAUEAAAAAAAIBQQAAAAAAAgFBAAAAAAACAUEAAAAAAAIBQQAAAAAAAgFBAAAAAAACAUEAAAAAAAIBQQAAAAAAAgFBAAAAAAACAUEAAAAAAAIBQQAAAAAAAgFBAmpmZmZl5UECamZmZmXlQQJqZmZmZeVBAmpmZmZl5UECamZmZmXlQQJqZmZmZeVBAmpmZmZl5UECamZmZmXlQQJqZmZmZeVBAmpmZmZl5UECamZmZmXlQQJqZmZmZeVBAmpmZmZl5UECamZmZmXlQQJqZmZmZeVBAmpmZmZl5UEAzMzMzM3NQQDMzMzMzc1BAMzMzMzNzUEAzMzMzM3NQQDMzMzMzc1BAMzMzMzNzUEAzMzMzM3NQQDMzMzMzc1BAMzMzMzNzUEAzMzMzM3NQQDMzMzMzc1BAMzMzMzNzUEAzMzMzM3NQQDMzMzMzc1BAMzMzMzNzUEAzMzMzM3NQQDMzMzMzc1BAMzMzMzNzUEDNzMzMzGxQQM3MzMzMbFBAzczMzMxsUEDNzMzMzGxQQM3MzMzMbFBAzczMzMxsUEDNzMzMzGxQQM3MzMzMbFBAzczMzMxsUEDNzMzMzGxQQM3MzMzMbFBAzczMzMxsUEDNzMzMzGxQQM3MzMzMbFBAzczMzMxsUEDNzMzMzGxQQM3MzMzMbFBAzczMzMxsUEDNzMzMzGxQQM3MzMzMbFBAzczMzMxsUEDNzMzMzGxQQM3MzMzMbFBAzczMzMxsUEDNzMzMzGxQQGZmZmZmZlBAZmZmZmZmUEBmZmZmZmZQQGZmZmZmZlBAZmZmZmZmUEBmZmZmZmZQQGZmZmZmZlBAZmZmZmZmUEBmZmZmZmZQQGZmZmZmZlBAZmZmZmZmUEBmZmZmZmZQQGZmZmZmZlBAZmZmZmZmUEBmZmZmZmZQQGZmZmZmZlBAZmZmZmZmUEBmZmZmZmZQQGZmZmZmZlBAZmZmZmZmUEBmZmZmZmZQQGZmZmZmZlBAZmZmZmZmUEBmZmZmZmZQQGZmZmZmZlBAZmZmZmZmUEBmZmZmZmZQQGZmZmZmZlBAZmZmZmZmUEBmZmZmZmZQQGZmZmZmZlBAAAAAAABgUEAAAAAAAGBQQAAAAAAAYFBAAAAAAABgUEAAAAAAAGBQQAAAAAAAYFBAAAAAAABgUEAAAAAAAGBQQAAAAAAAYFBAAAAAAABgUEAAAAAAAGBQQAAAAAAAYFBAAAAAAABgUEAAAAAAAGBQQAAAAAAAYFBAAAAAAABgUECamZmZmVlQQJqZmZmZWVBAmpmZmZlZUECamZmZmVlQQJqZmZmZWVBAmpmZmZlZUECamZmZmVlQQJqZmZmZWVBAmpmZmZlZUECamZmZmVlQQJqZmZmZWVBAmpmZmZlZUECamZmZmVlQQJqZmZmZWVBAmpmZmZlZUECamZmZmVlQQJqZmZmZWVBAmpmZmZlZUECamZmZmVlQQJqZmZmZWVBAmpmZmZlZUECamZmZmVlQQJqZmZmZWVBAmpmZmZlZUECamZmZmVlQQJqZmZmZWVBAmpmZmZlZUECamZmZmVlQQJqZmZmZWVBAmpmZmZlZUEAzMzMzM1NQQDMzMzMzU1BAMzMzMzNTUEAzMzMzM1NQQDMzMzMzU1BAMzMzMzNTUEAzMzMzM1NQQDMzMzMzU1BAMzMzMzNTUEAzMzMzM1NQQDMzMzMzU1BAMzMzMzNTUEAzMzMzM1NQQDMzMzMzU1BAMzMzMzNTUEAzMzMzM1NQQDMzMzMzU1BAMzMzMzNTUEAzMzMzM1NQQDMzMzMzU1BAMzMzMzNTUEDNzMzMzExQQM3MzMzMTFBAzczMzMxMUEDNzMzMzExQQM3MzMzMTFBAzczMzMxMUEDNzMzMzExQQM3MzMzMTFBAzczMzMxMUEDNzMzMzExQQM3MzMzMTFBAzczMzMxMUEDNzMzMzExQQM3MzMzMTFBAzczMzMxMUEDNzMzMzExQQM3MzMzMTFBAZmZmZmZGUEBmZmZmZkZQQGZmZmZmRlBAZmZmZmZGUEBmZmZmZkZQQGZmZmZmRlBAZmZmZmZGUEBmZmZmZkZQQGZmZmZmRlBAZmZmZmZGUEBmZmZmZkZQQGZmZmZmRlBAZmZmZmZGUEBmZmZmZkZQQGZmZmZmRlBAZmZmZmZGUEBmZmZmZkZQQGZmZmZmRlBAZmZmZmZGUEBmZmZmZkZQQGZmZmZmRlBAZmZmZmZGUEBmZmZmZkZQQAAAAAAAQFBAAAAAAABAUEAAAAAAAEBQQAAAAAAAQFBAAAAAAABAUEAAAAAAAEBQQAAAAAAAQFBAAAAAAABAUEAAAAAAAEBQQAAAAAAAQFBAAAAAAABAUEAAAAAAAEBQQAAAAAAAQFBAAAAAAABAUEAAAAAAAEBQQAAAAAAAQFBAAAAAAABAUEAAAAAAAEBQQAAAAAAAQFBAAAAAAABAUEAAAAAAAEBQQAAAAAAAQFBAAAAAAABAUEAAAAAAAEBQQAAAAAAAQFBAAAAAAABAUEAAAAAAAEBQQAAAAAAAQFBAAAAAAABAUECamZmZmTlQQJqZmZmZOVBAmpmZmZk5UECamZmZmTlQQJqZmZmZOVBAmpmZmZk5UECamZmZmTlQQJqZmZmZOVBAmpmZmZk5UECamZmZmTlQQJqZmZmZOVBAmpmZmZk5UECamZmZmTlQQJqZmZmZOVBAmpmZmZk5UECamZmZmTlQQJqZmZmZOVBAmpmZmZk5UECamZmZmTlQQJqZmZmZOVBAmpmZmZk5UECamZmZmTlQQJqZmZmZOVBAmpmZmZk5UECamZmZmTlQQJqZmZmZOVBAmpmZmZk5UECamZmZmTlQQJqZmZmZOVBAmpmZmZk5UECamZmZmTlQQJqZmZmZOVBAMzMzMzMzUEAzMzMzMzNQQDMzMzMzM1BAMzMzMzMzUEAzMzMzMzNQQDMzMzMzM1BAMzMzMzMzUEAzMzMzMzNQQDMzMzMzM1BAMzMzMzMzUEAzMzMzMzNQQDMzMzMzM1BAMzMzMzMzUEAzMzMzMzNQQDMzMzMzM1BAMzMzMzMzUEAzMzMzMzNQQDMzMzMzM1BAMzMzMzMzUEAzMzMzMzNQQDMzMzMzM1BAzczMzMwsUEDNzMzMzCxQQM3MzMzMLFBAzczMzMwsUEDNzMzMzCxQQM3MzMzMLFBAzczMzMwsUEDNzMzMzCxQQM3MzMzMLFBAzczMzMwsUEDNzMzMzCxQQM3MzMzMLFBAzczMzMwsUEDNzMzMzCxQQM3MzMzMLFBAzczMzMwsUEDNzMzMzCxQQM3MzMzMLFBAzczMzMwsUEBmZmZmZiZQQGZmZmZmJlBAZmZmZmYmUEBmZmZmZiZQQGZmZmZmJlBAZmZmZmYmUEBmZmZmZiZQQGZmZmZmJlBAZmZmZmYmUEBmZmZmZiZQQGZmZmZmJlBAZmZmZmYmUEBmZmZmZiZQQGZmZmZmJlBAZmZmZmYmUEBmZmZmZiZQQGZmZmZmJlBAZmZmZmYmUEBmZmZmZiZQQGZmZmZmJlBAZmZmZmYmUEBmZmZmZiZQQGZmZmZmJlBAZmZmZmYmUEBmZmZmZiZQQGZmZmZmJlBAZmZmZmYmUEBmZmZmZiZQQGZmZmZmJlBAAAAAAAAgUEAAAAAAACBQQAAAAAAAIFBAAAAAAAAgUEAAAAAAACBQQAAAAAAAIFBAAAAAAAAgUEAAAAAAACBQQAAAAAAAIFBAAAAAAAAgUEAAAAAAACBQQAAAAAAAIFBAAAAAAAAgUEAAAAAAACBQQAAAAAAAIFBAAAAAAAAgUEAAAAAAACBQQAAAAAAAIFBAAAAAAAAgUEAAAAAAACBQQAAAAAAAIFBAAAAAAAAgUEAAAAAAACBQQAAAAAAAIFBAmpmZmZkZUECamZmZmRlQQJqZmZmZGVBAmpmZmZkZUECamZmZmRlQQJqZmZmZGVBAmpmZmZkZUECamZmZmRlQQJqZmZmZGVBAmpmZmZkZUECamZmZmRlQQJqZmZmZGVBAmpmZmZkZUECamZmZmRlQQJqZmZmZGVBAmpmZmZkZUECamZmZmRlQQJqZmZmZGVBAmpmZmZkZUECamZmZmRlQQJqZmZmZGVBAmpmZmZkZUECamZmZmRlQQDMzMzMzE1BAMzMzMzMTUEAzMzMzMxNQQDMzMzMzE1BAMzMzMzMTUEAzMzMzMxNQQDMzMzMzE1BAMzMzMzMTUEAzMzMzMxNQQDMzMzMzE1BAMzMzMzMTUEAzMzMzMxNQQDMzMzMzE1BAMzMzMzMTUEAzMzMzMxNQQDMzMzMzE1BAzczMzMwMUEDNzMzMzAxQQM3MzMzMDFBAzczMzMwMUEDNzMzMzAxQQM3MzMzMDFBAzczMzMwMUEDNzMzMzAxQQM3MzMzMDFBAzczMzMwMUEDNzMzMzAxQQM3MzMzMDFBAzczMzMwMUEDNzMzMzAxQQM3MzMzMDFBAzczMzMwMUEDNzMzMzAxQQM3MzMzMDFBAzczMzMwMUEDNzMzMzAxQQM3MzMzMDFBAzczMzMwMUEBmZmZmZgZQQGZmZmZmBlBAZmZmZmYGUEBmZmZmZgZQQGZmZmZmBlBAZmZmZmYGUEBmZmZmZgZQQGZmZmZmBlBAZmZmZmYGUEBmZmZmZgZQQGZmZmZmBlBAZmZmZmYGUEBmZmZmZgZQQGZmZmZmBlBAZmZmZmYGUEBmZmZmZgZQQGZmZmZmBlBAZmZmZmYGUEBmZmZmZgZQQGZmZmZmBlBAZmZmZmYGUEBmZmZmZgZQQGZmZmZmBlBAZmZmZmYGUEBmZmZmZgZQQAAAAAAAAFBAAAAAAAAAUEAAAAAAAABQQAAAAAAAAFBAAAAAAAAAUEAAAAAAAABQQAAAAAAAAFBAAAAAAAAAUEAAAAAAAABQQAAAAAAAAFBAAAAAAAAAUEAAAAAAAABQQDMzMzMz809AMzMzMzPzT0AzMzMzM\\u002fNPQDMzMzMz809AMzMzMzPzT0AzMzMzM\\u002fNPQDMzMzMz809AMzMzMzPzT0AzMzMzM\\u002fNPQDMzMzMz809AMzMzMzPzT0AzMzMzM\\u002fNPQDMzMzMz809AMzMzMzPzT0AzMzMzM\\u002fNPQDMzMzMz809AMzMzMzPzT0AzMzMzM\\u002fNPQDMzMzMz809AMzMzMzPzT0BmZmZmZuZPQGZmZmZm5k9AZmZmZmbmT0BmZmZmZuZPQGZmZmZm5k9AZmZmZmbmT0BmZmZmZuZPQGZmZmZm5k9AZmZmZmbmT0BmZmZmZuZPQGZmZmZm5k9AZmZmZmbmT0BmZmZmZuZPQGZmZmZm5k9AZmZmZmbmT0BmZmZmZuZPQGZmZmZm5k9AZmZmZmbmT0CamZmZmdlPQJqZmZmZ2U9AmpmZmZnZT0CamZmZmdlPQJqZmZmZ2U9AmpmZmZnZT0CamZmZmdlPQJqZmZmZ2U9AmpmZmZnZT0CamZmZmdlPQJqZmZmZ2U9AmpmZmZnZT0CamZmZmdlPQJqZmZmZ2U9AmpmZmZnZT0CamZmZmdlPQJqZmZmZ2U9AmpmZmZnZT0CamZmZmdlPQJqZmZmZ2U9AzczMzMzMT0DNzMzMzMxPQM3MzMzMzE9AzczMzMzMT0DNzMzMzMxPQM3MzMzMzE9AzczMzMzMT0DNzMzMzMxPQM3MzMzMzE9AzczMzMzMT0DNzMzMzMxPQM3MzMzMzE9AzczMzMzMT0DNzMzMzMxPQM3MzMzMzE9AzczMzMzMT0DNzMzMzMxPQM3MzMzMzE9AzczMzMzMT0AAAAAAAMBPQAAAAAAAwE9AAAAAAADAT0AAAAAAAMBPQAAAAAAAwE9AAAAAAADAT0AAAAAAAMBPQAAAAAAAwE9AAAAAAADAT0AAAAAAAMBPQAAAAAAAwE9AAAAAAADAT0AAAAAAAMBPQAAAAAAAwE9AAAAAAADAT0AAAAAAAMBPQAAAAAAAwE9AAAAAAADAT0AAAAAAAMBPQAAAAAAAwE9AAAAAAADAT0AAAAAAAMBPQAAAAAAAwE9AAAAAAADAT0AAAAAAAMBPQAAAAAAAwE9AAAAAAADAT0AzMzMzM7NPQDMzMzMzs09AMzMzMzOzT0AzMzMzM7NPQDMzMzMzs09AMzMzMzOzT0AzMzMzM7NPQDMzMzMzs09AMzMzMzOzT0AzMzMzM7NPQDMzMzMzs09AMzMzMzOzT0AzMzMzM7NPQDMzMzMzs09AMzMzMzOzT0AzMzMzM7NPQDMzMzMzs09AMzMzMzOzT0AzMzMzM7NPQDMzMzMzs09AMzMzMzOzT0AzMzMzM7NPQDMzMzMzs09AMzMzMzOzT0AzMzMzM7NPQDMzMzMzs09AMzMzMzOzT0AzMzMzM7NPQDMzMzMzs09AMzMzMzOzT0AzMzMzM7NPQDMzMzMzs09AZmZmZmamT0BmZmZmZqZPQGZmZmZmpk9AZmZmZmamT0BmZmZmZqZPQGZmZmZmpk9AZmZmZmamT0BmZmZmZqZPQGZmZmZmpk9AZmZmZmamT0BmZmZmZqZPQGZmZmZmpk9AZmZmZmamT0BmZmZmZqZPQGZmZmZmpk9AZmZmZmamT0BmZmZmZqZPQGZmZmZmpk9AZmZmZmamT0BmZmZmZqZPQGZmZmZmpk9AZmZmZmamT0BmZmZmZqZPQGZmZmZmpk9AZmZmZmamT0BmZmZmZqZPQGZmZmZmpk9AZmZmZmamT0BmZmZmZqZPQGZmZmZmpk9AmpmZmZmZT0CamZmZmZlPQJqZmZmZmU9AmpmZmZmZT0CamZmZmZlPQJqZmZmZmU9AmpmZmZmZT0CamZmZmZlPQJqZmZmZmU9AmpmZmZmZT0CamZmZmZlPQJqZmZmZmU9AmpmZmZmZT0CamZmZmZlPQJqZmZmZmU9AmpmZmZmZT0CamZmZmZlPQJqZmZmZmU9AmpmZmZmZT0CamZmZmZlPQJqZmZmZmU9AmpmZmZmZT0CamZmZmZlPQJqZmZmZmU9AmpmZmZmZT0CamZmZmZlPQJqZmZmZmU9AmpmZmZmZT0DNzMzMzIxPQM3MzMzMjE9AzczMzMyMT0DNzMzMzIxPQM3MzMzMjE9AzczMzMyMT0DNzMzMzIxPQM3MzMzMjE9AzczMzMyMT0DNzMzMzIxPQM3MzMzMjE9AzczMzMyMT0DNzMzMzIxPQM3MzMzMjE9AzczMzMyMT0DNzMzMzIxPQM3MzMzMjE9AzczMzMyMT0DNzMzMzIxPQM3MzMzMjE9AzczMzMyMT0AAAAAAAIBPQAAAAAAAgE9AAAAAAACAT0AAAAAAAIBPQAAAAAAAgE9AAAAAAACAT0AAAAAAAIBPQAAAAAAAgE9AAAAAAACAT0AAAAAAAIBPQAAAAAAAgE9AAAAAAACAT0AAAAAAAIBPQAAAAAAAgE9AAAAAAACAT0AAAAAAAIBPQAAAAAAAgE9AAAAAAACAT0AAAAAAAIBPQAAAAAAAgE9AAAAAAACAT0AAAAAAAIBPQAAAAAAAgE9AAAAAAACAT0AAAAAAAIBPQAAAAAAAgE9AMzMzMzNzT0AzMzMzM3NPQDMzMzMzc09AMzMzMzNzT0AzMzMzM3NPQDMzMzMzc09AMzMzMzNzT0AzMzMzM3NPQDMzMzMzc09AMzMzMzNzT0AzMzMzM3NPQDMzMzMzc09AMzMzMzNzT0AzMzMzM3NPQDMzMzMzc09AMzMzMzNzT0AzMzMzM3NPQDMzMzMzc09AMzMzMzNzT0AzMzMzM3NPQDMzMzMzc09AMzMzMzNzT0AzMzMzM3NPQGZmZmZmZk9AZmZmZmZmT0BmZmZmZmZPQGZmZmZmZk9AZmZmZmZmT0BmZmZmZmZPQGZmZmZmZk9AZmZmZmZmT0BmZmZmZmZPQGZmZmZmZk9AZmZmZmZmT0BmZmZmZmZPQGZmZmZmZk9AZmZmZmZmT0BmZmZmZmZPQGZmZmZmZk9AZmZmZmZmT0BmZmZmZmZPQGZmZmZmZk9AZmZmZmZmT0BmZmZmZmZPQGZmZmZmZk9AZmZmZmZmT0CamZmZmVlPQJqZmZmZWU9AmpmZmZlZT0CamZmZmVlPQJqZmZmZWU9AmpmZmZlZT0CamZmZmVlPQJqZmZmZWU9AmpmZmZlZT0CamZmZmVlPQJqZmZmZWU9AmpmZmZlZT0CamZmZmVlPQJqZmZmZWU9AmpmZmZlZT0CamZmZmVlPQJqZmZmZWU9AmpmZmZlZT0CamZmZmVlPQJqZmZmZWU9AmpmZmZlZT0CamZmZmVlPQJqZmZmZWU9AmpmZmZlZT0CamZmZmVlPQJqZmZmZWU9AmpmZmZlZT0CamZmZmVlPQJqZmZmZWU9AmpmZmZlZT0CamZmZmVlPQJqZmZmZWU9AmpmZmZlZT0DNzMzMzExPQM3MzMzMTE9AzczMzMxMT0DNzMzMzExPQM3MzMzMTE9AzczMzMxMT0DNzMzMzExPQM3MzMzMTE9AzczMzMxMT0DNzMzMzExPQM3MzMzMTE9AzczMzMxMT0DNzMzMzExPQAAAAAAAQE9AAAAAAABAT0AAAAAAAEBPQAAAAAAAQE9AAAAAAABAT0AAAAAAAEBPQAAAAAAAQE9AAAAAAABAT0AAAAAAAEBPQAAAAAAAQE9AAAAAAABAT0AAAAAAAEBPQAAAAAAAQE9AAAAAAABAT0AAAAAAAEBPQAAAAAAAQE9AAAAAAABAT0AAAAAAAEBPQAAAAAAAQE9AAAAAAABAT0AzMzMzMzNPQDMzMzMzM09AMzMzMzMzT0AzMzMzMzNPQDMzMzMzM09AMzMzMzMzT0AzMzMzMzNPQDMzMzMzM09AMzMzMzMzT0AzMzMzMzNPQDMzMzMzM09AMzMzMzMzT0AzMzMzMzNPQDMzMzMzM09AMzMzMzMzT0AzMzMzMzNPQDMzMzMzM09AMzMzMzMzT0AzMzMzMzNPQDMzMzMzM09AMzMzMzMzT0AzMzMzMzNPQGZmZmZmJk9AZmZmZmYmT0BmZmZmZiZPQGZmZmZmJk9AZmZmZmYmT0BmZmZmZiZPQGZmZmZmJk9AZmZmZmYmT0BmZmZmZiZPQGZmZmZmJk9AZmZmZmYmT0BmZmZmZiZPQGZmZmZmJk9AZmZmZmYmT0BmZmZmZiZPQGZmZmZmJk9AZmZmZmYmT0BmZmZmZiZPQGZmZmZmJk9AZmZmZmYmT0BmZmZmZiZPQGZmZmZmJk9AZmZmZmYmT0BmZmZmZiZPQJqZmZmZGU9AmpmZmZkZT0CamZmZmRlPQJqZmZmZGU9AmpmZmZkZT0CamZmZmRlPQJqZmZmZGU9AmpmZmZkZT0CamZmZmRlPQJqZmZmZGU9AmpmZmZkZT0CamZmZmRlPQJqZmZmZGU9AmpmZmZkZT0CamZmZmRlPQJqZmZmZGU9AmpmZmZkZT0CamZmZmRlPQJqZmZmZGU9AmpmZmZkZT0CamZmZmRlPQJqZmZmZGU9AmpmZmZkZT0DNzMzMzAxPQM3MzMzMDE9AzczMzMwMT0DNzMzMzAxPQM3MzMzMDE9AzczMzMwMT0DNzMzMzAxPQM3MzMzMDE9AzczMzMwMT0DNzMzMzAxPQM3MzMzMDE9AzczMzMwMT0DNzMzMzAxPQM3MzMzMDE9AAAAAAAAAT0AAAAAAAABPQAAAAAAAAE9AAAAAAAAAT0AAAAAAAABPQAAAAAAAAE9AAAAAAAAAT0AAAAAAAABPQAAAAAAAAE9AAAAAAAAAT0AAAAAAAABPQAAAAAAAAE9AAAAAAAAAT0AAAAAAAABPQAAAAAAAAE9AAAAAAAAAT0AAAAAAAABPQAAAAAAAAE9AAAAAAAAAT0AAAAAAAABPQAAAAAAAAE9AAAAAAAAAT0AAAAAAAABPQAAAAAAAAE9AMzMzMzPzTkAzMzMzM\\u002fNOQDMzMzMz805AMzMzMzPzTkAzMzMzM\\u002fNOQDMzMzMz805AMzMzMzPzTkAzMzMzM\\u002fNOQDMzMzMz805AMzMzMzPzTkAzMzMzM\\u002fNOQDMzMzMz805AMzMzMzPzTkAzMzMzM\\u002fNOQDMzMzMz805AMzMzMzPzTkAzMzMzM\\u002fNOQGZmZmZm5k5AZmZmZmbmTkBmZmZmZuZOQGZmZmZm5k5AZmZmZmbmTkBmZmZmZuZOQGZmZmZm5k5AZmZmZmbmTkBmZmZmZuZOQGZmZmZm5k5AZmZmZmbmTkBmZmZmZuZOQGZmZmZm5k5AZmZmZmbmTkBmZmZmZuZOQGZmZmZm5k5AZmZmZmbmTkBmZmZmZuZOQGZmZmZm5k5AZmZmZmbmTkBmZmZmZuZOQGZmZmZm5k5AZmZmZmbmTkBmZmZmZuZOQGZmZmZm5k5AZmZmZmbmTkBmZmZmZuZOQJqZmZmZ2U5AmpmZmZnZTkCamZmZmdlOQJqZmZmZ2U5AmpmZmZnZTkCamZmZmdlOQJqZmZmZ2U5AmpmZmZnZTkCamZmZmdlOQJqZmZmZ2U5AmpmZmZnZTkCamZmZmdlOQJqZmZmZ2U5AmpmZmZnZTkCamZmZmdlOQJqZmZmZ2U5AmpmZmZnZTkDNzMzMzMxOQM3MzMzMzE5AzczMzMzMTkDNzMzMzMxOQM3MzMzMzE5AzczMzMzMTkDNzMzMzMxOQM3MzMzMzE5AzczMzMzMTkDNzMzMzMxOQM3MzMzMzE5AzczMzMzMTkDNzMzMzMxOQM3MzMzMzE5AzczMzMzMTkDNzMzMzMxOQM3MzMzMzE5AzczMzMzMTkDNzMzMzMxOQM3MzMzMzE5AzczMzMzMTkDNzMzMzMxOQM3MzMzMzE5AzczMzMzMTkDNzMzMzMxOQAAAAAAAwE5AAAAAAADATkAAAAAAAMBOQAAAAAAAwE5AAAAAAADATkAAAAAAAMBOQAAAAAAAwE5AAAAAAADATkAAAAAAAMBOQAAAAAAAwE5AAAAAAADATkAAAAAAAMBOQAAAAAAAwE5AAAAAAADATkAAAAAAAMBOQAAAAAAAwE5AAAAAAADATkAAAAAAAMBOQAAAAAAAwE5AAAAAAADATkAAAAAAAMBOQAAAAAAAwE5AAAAAAADATkAAAAAAAMBOQDMzMzMzs05AMzMzMzOzTkAzMzMzM7NOQDMzMzMzs05AMzMzMzOzTkAzMzMzM7NOQDMzMzMzs05AMzMzMzOzTkAzMzMzM7NOQDMzMzMzs05AMzMzMzOzTkAzMzMzM7NOQDMzMzMzs05AMzMzMzOzTkAzMzMzM7NOQDMzMzMzs05AMzMzMzOzTkAzMzMzM7NOQDMzMzMzs05AMzMzMzOzTkAzMzMzM7NOQGZmZmZmpk5AZmZmZmamTkBmZmZmZqZOQGZmZmZmpk5AZmZmZmamTkBmZmZmZqZOQGZmZmZmpk5AZmZmZmamTkBmZmZmZqZOQGZmZmZmpk5AZmZmZmamTkBmZmZmZqZOQGZmZmZmpk5AZmZmZmamTkBmZmZmZqZOQGZmZmZmpk5AZmZmZmamTkBmZmZmZqZOQGZmZmZmpk5AZmZmZmamTkBmZmZmZqZOQJqZmZmZmU5AmpmZmZmZTkCamZmZmZlOQJqZmZmZmU5AmpmZmZmZTkCamZmZmZlOQJqZmZmZmU5AmpmZmZmZTkCamZmZmZlOQJqZmZmZmU5AmpmZmZmZTkCamZmZmZlOQJqZmZmZmU5AmpmZmZmZTkCamZmZmZlOQJqZmZmZmU5AmpmZmZmZTkCamZmZmZlOQJqZmZmZmU5AmpmZmZmZTkDNzMzMzIxOQM3MzMzMjE5AzczMzMyMTkDNzMzMzIxOQM3MzMzMjE5AzczMzMyMTkDNzMzMzIxOQM3MzMzMjE5AzczMzMyMTkDNzMzMzIxOQM3MzMzMjE5AzczMzMyMTkDNzMzMzIxOQM3MzMzMjE5AzczMzMyMTkDNzMzMzIxOQM3MzMzMjE5AzczMzMyMTkDNzMzMzIxOQM3MzMzMjE5AzczMzMyMTkDNzMzMzIxOQM3MzMzMjE5AzczMzMyMTkDNzMzMzIxOQAAAAAAAgE5AAAAAAACATkAAAAAAAIBOQAAAAAAAgE5AAAAAAACATkAAAAAAAIBOQAAAAAAAgE5AAAAAAACATkAAAAAAAIBOQAAAAAAAgE5AAAAAAACATkAAAAAAAIBOQAAAAAAAgE5AAAAAAACATkAAAAAAAIBOQAAAAAAAgE5AAAAAAACATkAAAAAAAIBOQAAAAAAAgE5AAAAAAACATkAAAAAAAIBOQAAAAAAAgE5AAAAAAACATkAAAAAAAIBOQDMzMzMzc05AMzMzMzNzTkAzMzMzM3NOQDMzMzMzc05AMzMzMzNzTkAzMzMzM3NOQDMzMzMzc05AMzMzMzNzTkAzMzMzM3NOQDMzMzMzc05AMzMzMzNzTkAzMzMzM3NOQDMzMzMzc05AMzMzMzNzTkAzMzMzM3NOQDMzMzMzc05AMzMzMzNzTkAzMzMzM3NOQGZmZmZmZk5AZmZmZmZmTkBmZmZmZmZOQGZmZmZmZk5AZmZmZmZmTkBmZmZmZmZOQGZmZmZmZk5AZmZmZmZmTkBmZmZmZmZOQGZmZmZmZk5AZmZmZmZmTkBmZmZmZmZOQGZmZmZmZk5AZmZmZmZmTkBmZmZmZmZOQGZmZmZmZk5AZmZmZmZmTkBmZmZmZmZOQGZmZmZmZk5AZmZmZmZmTkBmZmZmZmZOQGZmZmZmZk5AZmZmZmZmTkBmZmZmZmZOQGZmZmZmZk5AZmZmZmZmTkCamZmZmVlOQJqZmZmZWU5AmpmZmZlZTkCamZmZmVlOQJqZmZmZWU5AmpmZmZlZTkCamZmZmVlOQJqZmZmZWU5AmpmZmZlZTkCamZmZmVlOQJqZmZmZWU5AmpmZmZlZTkCamZmZmVlOQJqZmZmZWU5AmpmZmZlZTkCamZmZmVlOQJqZmZmZWU5AmpmZmZlZTkCamZmZmVlOQJqZmZmZWU5AmpmZmZlZTkCamZmZmVlOQJqZmZmZWU5AzczMzMxMTkDNzMzMzExOQM3MzMzMTE5AzczMzMxMTkDNzMzMzExOQM3MzMzMTE5AzczMzMxMTkDNzMzMzExOQM3MzMzMTE5AzczMzMxMTkDNzMzMzExOQM3MzMzMTE5AzczMzMxMTkDNzMzMzExOQM3MzMzMTE5AzczMzMxMTkDNzMzMzExOQAAAAAAAQE5AAAAAAABATkAAAAAAAEBOQAAAAAAAQE5AAAAAAABATkAAAAAAAEBOQAAAAAAAQE5AAAAAAABATkAAAAAAAEBOQAAAAAAAQE5AAAAAAABATkAAAAAAAEBOQAAAAAAAQE5AAAAAAABATkAAAAAAAEBOQAAAAAAAQE5AAAAAAABATkAAAAAAAEBOQDMzMzMzM05AMzMzMzMzTkAzMzMzMzNOQDMzMzMzM05AMzMzMzMzTkAzMzMzMzNOQDMzMzMzM05AMzMzMzMzTkAzMzMzMzNOQDMzMzMzM05AMzMzMzMzTkAzMzMzMzNOQDMzMzMzM05AMzMzMzMzTkAzMzMzMzNOQDMzMzMzM05AMzMzMzMzTkAzMzMzMzNOQDMzMzMzM05AMzMzMzMzTkAzMzMzMzNOQDMzMzMzM05AMzMzMzMzTkAzMzMzMzNOQDMzMzMzM05AMzMzMzMzTkAzMzMzMzNOQDMzMzMzM05AMzMzMzMzTkBmZmZmZiZOQGZmZmZmJk5AZmZmZmYmTkBmZmZmZiZOQGZmZmZmJk5AZmZmZmYmTkBmZmZmZiZOQGZmZmZmJk5AZmZmZmYmTkBmZmZmZiZOQGZmZmZmJk5AmpmZmZkZTkCamZmZmRlOQJqZmZmZGU5AmpmZmZkZTkCamZmZmRlOQJqZmZmZGU5AmpmZmZkZTkCamZmZmRlOQJqZmZmZGU5AmpmZmZkZTkCamZmZmRlOQJqZmZmZGU5AmpmZmZkZTkCamZmZmRlOQJqZmZmZGU5AmpmZmZkZTkCamZmZmRlOQJqZmZmZGU5AmpmZmZkZTkCamZmZmRlOQM3MzMzMDE5AzczMzMwMTkDNzMzMzAxOQM3MzMzMDE5AzczMzMwMTkDNzMzMzAxOQM3MzMzMDE5AzczMzMwMTkDNzMzMzAxOQM3MzMzMDE5AzczMzMwMTkDNzMzMzAxOQM3MzMzMDE5AzczMzMwMTkDNzMzMzAxOQM3MzMzMDE5AzczMzMwMTkDNzMzMzAxOQM3MzMzMDE5AzczMzMwMTkDNzMzMzAxOQAAAAAAAAE5AAAAAAAAATkAAAAAAAABOQAAAAAAAAE5AAAAAAAAATkAAAAAAAABOQAAAAAAAAE5AAAAAAAAATkAAAAAAAABOQAAAAAAAAE5AAAAAAAAATkAAAAAAAABOQAAAAAAAAE5AAAAAAAAATkAAAAAAAABOQAAAAAAAAE5AAAAAAAAATkAAAAAAAABOQAAAAAAAAE5AAAAAAAAATkAAAAAAAABOQAAAAAAAAE5AMzMzMzPzTUAzMzMzM\\u002fNNQDMzMzMz801AMzMzMzPzTUAzMzMzM\\u002fNNQDMzMzMz801AMzMzMzPzTUAzMzMzM\\u002fNNQDMzMzMz801AMzMzMzPzTUAzMzMzM\\u002fNNQDMzMzMz801AMzMzMzPzTUAzMzMzM\\u002fNNQDMzMzMz801AMzMzMzPzTUAzMzMzM\\u002fNNQDMzMzMz801AMzMzMzPzTUBmZmZmZuZNQGZmZmZm5k1AZmZmZmbmTUBmZmZmZuZNQGZmZmZm5k1AZmZmZmbmTUBmZmZmZuZNQGZmZmZm5k1AZmZmZmbmTUBmZmZmZuZNQGZmZmZm5k1AZmZmZmbmTUBmZmZmZuZNQGZmZmZm5k1AZmZmZmbmTUBmZmZmZuZNQGZmZmZm5k1AZmZmZmbmTUCamZmZmdlNQJqZmZmZ2U1AmpmZmZnZTUCamZmZmdlNQJqZmZmZ2U1AmpmZmZnZTUCamZmZmdlNQJqZmZmZ2U1AmpmZmZnZTUCamZmZmdlNQJqZmZmZ2U1AmpmZmZnZTUCamZmZmdlNQJqZmZmZ2U1AmpmZmZnZTUCamZmZmdlNQJqZmZmZ2U1AzczMzMzMTUDNzMzMzMxNQM3MzMzMzE1AzczMzMzMTUDNzMzMzMxNQM3MzMzMzE1AzczMzMzMTUDNzMzMzMxNQM3MzMzMzE1AzczMzMzMTUDNzMzMzMxNQM3MzMzMzE1AzczMzMzMTUDNzMzMzMxNQM3MzMzMzE1AzczMzMzMTUDNzMzMzMxNQM3MzMzMzE1AzczMzMzMTUDNzMzMzMxNQAAAAAAAwE1AAAAAAADATUAAAAAAAMBNQAAAAAAAwE1AAAAAAADATUAAAAAAAMBNQAAAAAAAwE1AAAAAAADATUAAAAAAAMBNQAAAAAAAwE1AAAAAAADATUAAAAAAAMBNQAAAAAAAwE1AAAAAAADATUAAAAAAAMBNQAAAAAAAwE1AAAAAAADATUAAAAAAAMBNQAAAAAAAwE1AAAAAAADATUAAAAAAAMBNQDMzMzMzs01AMzMzMzOzTUAzMzMzM7NNQDMzMzMzs01AMzMzMzOzTUAzMzMzM7NNQDMzMzMzs01AMzMzMzOzTUAzMzMzM7NNQDMzMzMzs01AMzMzMzOzTUAzMzMzM7NNQDMzMzMzs01AMzMzMzOzTUAzMzMzM7NNQDMzMzMzs01AMzMzMzOzTUAzMzMzM7NNQDMzMzMzs01AMzMzMzOzTUAzMzMzM7NNQDMzMzMzs01AMzMzMzOzTUBmZmZmZqZNQGZmZmZmpk1AZmZmZmamTUBmZmZmZqZNQGZmZmZmpk1AZmZmZmamTUBmZmZmZqZNQGZmZmZmpk1AZmZmZmamTUBmZmZmZqZNQGZmZmZmpk1AZmZmZmamTUBmZmZmZqZNQGZmZmZmpk1AZmZmZmamTUBmZmZmZqZNQGZmZmZmpk1AZmZmZmamTUCamZmZmZlNQJqZmZmZmU1AmpmZmZmZTUCamZmZmZlNQJqZmZmZmU1AmpmZmZmZTUCamZmZmZlNQJqZmZmZmU1AmpmZmZmZTUCamZmZmZlNQJqZmZmZmU1AzczMzMyMTUDNzMzMzIxNQM3MzMzMjE1AzczMzMyMTUDNzMzMzIxNQM3MzMzMjE1AzczMzMyMTUDNzMzMzIxNQM3MzMzMjE1AzczMzMyMTUDNzMzMzIxNQM3MzMzMjE1AzczMzMyMTUDNzMzMzIxNQM3MzMzMjE1AzczMzMyMTUAAAAAAAIBNQAAAAAAAgE1AAAAAAACATUAAAAAAAIBNQAAAAAAAgE1AAAAAAACATUAAAAAAAIBNQAAAAAAAgE1AAAAAAACATUAAAAAAAIBNQAAAAAAAgE1AAAAAAACATUAAAAAAAIBNQAAAAAAAgE1AAAAAAACATUAAAAAAAIBNQAAAAAAAgE1AAAAAAACATUAAAAAAAIBNQDMzMzMzc01AMzMzMzNzTUAzMzMzM3NNQDMzMzMzc01AMzMzMzNzTUAzMzMzM3NNQDMzMzMzc01AMzMzMzNzTUAzMzMzM3NNQDMzMzMzc01AMzMzMzNzTUAzMzMzM3NNQDMzMzMzc01AMzMzMzNzTUAzMzMzM3NNQDMzMzMzc01AMzMzMzNzTUAzMzMzM3NNQDMzMzMzc01AMzMzMzNzTUAzMzMzM3NNQDMzMzMzc01AMzMzMzNzTUAzMzMzM3NNQDMzMzMzc01AMzMzMzNzTUAzMzMzM3NNQDMzMzMzc01AZmZmZmZmTUBmZmZmZmZNQGZmZmZmZk1AZmZmZmZmTUBmZmZmZmZNQGZmZmZmZk1AZmZmZmZmTUBmZmZmZmZNQGZmZmZmZk1AZmZmZmZmTUBmZmZmZmZNQGZmZmZmZk1AZmZmZmZmTUBmZmZmZmZNQGZmZmZmZk1AZmZmZmZmTUBmZmZmZmZNQGZmZmZmZk1AZmZmZmZmTUCamZmZmVlNQJqZmZmZWU1AmpmZmZlZTUCamZmZmVlNQJqZmZmZWU1AmpmZmZlZTUCamZmZmVlNQJqZmZmZWU1AmpmZmZlZTUCamZmZmVlNQJqZmZmZWU1AmpmZmZlZTUCamZmZmVlNQJqZmZmZWU1AmpmZmZlZTUCamZmZmVlNQJqZmZmZWU1AmpmZmZlZTUDNzMzMzExNQM3MzMzMTE1AzczMzMxMTUDNzMzMzExNQM3MzMzMTE1AzczMzMxMTUDNzMzMzExNQM3MzMzMTE1AzczMzMxMTUDNzMzMzExNQAAAAAAAQE1AAAAAAABATUAAAAAAAEBNQAAAAAAAQE1AAAAAAABATUAAAAAAAEBNQAAAAAAAQE1AAAAAAABATUAAAAAAAEBNQAAAAAAAQE1AAAAAAABATUAAAAAAAEBNQAAAAAAAQE1AAAAAAABATUAAAAAAAEBNQAAAAAAAQE1AMzMzMzMzTUAzMzMzMzNNQDMzMzMzM01AMzMzMzMzTUAzMzMzMzNNQDMzMzMzM01AMzMzMzMzTUAzMzMzMzNNQDMzMzMzM01AMzMzMzMzTUAzMzMzMzNNQDMzMzMzM01AMzMzMzMzTUAzMzMzMzNNQGZmZmZmJk1AZmZmZmYmTUBmZmZmZiZNQGZmZmZmJk1AZmZmZmYmTUBmZmZmZiZNQGZmZmZmJk1AZmZmZmYmTUBmZmZmZiZNQGZmZmZmJk1AZmZmZmYmTUBmZmZmZiZNQGZmZmZmJk1AZmZmZmYmTUBmZmZmZiZNQGZmZmZmJk1AZmZmZmYmTUBmZmZmZiZNQGZmZmZmJk1AZmZmZmYmTUBmZmZmZiZNQJqZmZmZGU1AmpmZmZkZTUCamZmZmRlNQJqZmZmZGU1AmpmZmZkZTUCamZmZmRlNQJqZmZmZGU1AmpmZmZkZTUCamZmZmRlNQJqZmZmZGU1AmpmZmZkZTUCamZmZmRlNQJqZmZmZGU1AmpmZmZkZTUCamZmZmRlNQM3MzMzMDE1AzczMzMwMTUDNzMzMzAxNQM3MzMzMDE1AzczMzMwMTUDNzMzMzAxNQM3MzMzMDE1AzczMzMwMTUDNzMzMzAxNQM3MzMzMDE1AzczMzMwMTUDNzMzMzAxNQM3MzMzMDE1AzczMzMwMTUDNzMzMzAxNQM3MzMzMDE1AzczMzMwMTUDNzMzMzAxNQM3MzMzMDE1AAAAAAAAATUAAAAAAAABNQAAAAAAAAE1AAAAAAAAATUAAAAAAAABNQAAAAAAAAE1AAAAAAAAATUAAAAAAAABNQAAAAAAAAE1AAAAAAAAATUAAAAAAAABNQAAAAAAAAE1AAAAAAAAATUAAAAAAAABNQDMzMzMz80xAMzMzMzPzTEAzMzMzM\\u002fNMQDMzMzMz80xAMzMzMzPzTEAzMzMzM\\u002fNMQDMzMzMz80xAMzMzMzPzTEAzMzMzM\\u002fNMQDMzMzMz80xAMzMzMzPzTEAzMzMzM\\u002fNMQDMzMzMz80xAMzMzMzPzTEAzMzMzM\\u002fNMQDMzMzMz80xAMzMzMzPzTEAzMzMzM\\u002fNMQDMzMzMz80xAMzMzMzPzTEBmZmZmZuZMQGZmZmZm5kxAZmZmZmbmTEBmZmZmZuZMQGZmZmZm5kxAZmZmZmbmTEBmZmZmZuZMQGZmZmZm5kxAZmZmZmbmTEBmZmZmZuZMQGZmZmZm5kxAZmZmZmbmTEBmZmZmZuZMQGZmZmZm5kxAZmZmZmbmTEBmZmZmZuZMQGZmZmZm5kxAZmZmZmbmTEBmZmZmZuZMQGZmZmZm5kxAZmZmZmbmTEBmZmZmZuZMQGZmZmZm5kxAmpmZmZnZTECamZmZmdlMQJqZmZmZ2UxAmpmZmZnZTECamZmZmdlMQJqZmZmZ2UxAmpmZmZnZTECamZmZmdlMQJqZmZmZ2UxAmpmZmZnZTECamZmZmdlMQJqZmZmZ2UxAmpmZmZnZTECamZmZmdlMQJqZmZmZ2UxAmpmZmZnZTEDNzMzMzMxMQM3MzMzMzExAzczMzMzMTEDNzMzMzMxMQM3MzMzMzExAzczMzMzMTEDNzMzMzMxMQM3MzMzMzExAzczMzMzMTEDNzMzMzMxMQM3MzMzMzExAzczMzMzMTEDNzMzMzMxMQM3MzMzMzExAzczMzMzMTEDNzMzMzMxMQM3MzMzMzExAzczMzMzMTEDNzMzMzMxMQM3MzMzMzExAzczMzMzMTEDNzMzMzMxMQM3MzMzMzExAzczMzMzMTEDNzMzMzMxMQAAAAAAAwExAAAAAAADATEAAAAAAAMBMQAAAAAAAwExAAAAAAADATEAAAAAAAMBMQAAAAAAAwExAAAAAAADATEAAAAAAAMBMQAAAAAAAwExAAAAAAADATEAzMzMzM7NMQDMzMzMzs0xAMzMzMzOzTEAzMzMzM7NMQDMzMzMzs0xAMzMzMzOzTEAzMzMzM7NMQDMzMzMzs0xAMzMzMzOzTEAzMzMzM7NMQDMzMzMzs0xAMzMzMzOzTEAzMzMzM7NMQDMzMzMzs0xAMzMzMzOzTEAzMzMzM7NMQDMzMzMzs0xAZmZmZmamTEBmZmZmZqZMQGZmZmZmpkxAZmZmZmamTEBmZmZmZqZMQGZmZmZmpkxAZmZmZmamTEBmZmZmZqZMQGZmZmZmpkxAZmZmZmamTEBmZmZmZqZMQGZmZmZmpkxAZmZmZmamTEBmZmZmZqZMQGZmZmZmpkxAZmZmZmamTEBmZmZmZqZMQGZmZmZmpkxAZmZmZmamTEBmZmZmZqZMQGZmZmZmpkxAZmZmZmamTEBmZmZmZqZMQGZmZmZmpkxAmpmZmZmZTECamZmZmZlMQJqZmZmZmUxAmpmZmZmZTECamZmZmZlMQJqZmZmZmUxAmpmZmZmZTECamZmZmZlMQJqZmZmZmUxAmpmZmZmZTECamZmZmZlMQM3MzMzMjExAzczMzMyMTEDNzMzMzIxMQM3MzMzMjExAzczMzMyMTEDNzMzMzIxMQM3MzMzMjExAzczMzMyMTEDNzMzMzIxMQM3MzMzMjExAzczMzMyMTEDNzMzMzIxMQM3MzMzMjExAzczMzMyMTEDNzMzMzIxMQM3MzMzMjExAzczMzMyMTEDNzMzMzIxMQAAAAAAAgExAAAAAAACATEAAAAAAAIBMQAAAAAAAgExAAAAAAACATEAAAAAAAIBMQAAAAAAAgExAAAAAAACATEAAAAAAAIBMQAAAAAAAgExAAAAAAACATEAzMzMzM3NMQDMzMzMzc0xAMzMzMzNzTEAzMzMzM3NMQDMzMzMzc0xAMzMzMzNzTEAzMzMzM3NMQDMzMzMzc0xAMzMzMzNzTEAzMzMzM3NMQDMzMzMzc0xAMzMzMzNzTEAzMzMzM3NMQDMzMzMzc0xAMzMzMzNzTEAzMzMzM3NMQDMzMzMzc0xAMzMzMzNzTEBmZmZmZmZMQGZmZmZmZkxAZmZmZmZmTEBmZmZmZmZMQGZmZmZmZkxAZmZmZmZmTEBmZmZmZmZMQGZmZmZmZkxAZmZmZmZmTEBmZmZmZmZMQGZmZmZmZkxAZmZmZmZmTEBmZmZmZmZMQGZmZmZmZkxAZmZmZmZmTEBmZmZmZmZMQGZmZmZmZkxAmpmZmZlZTECamZmZmVlMQJqZmZmZWUxAmpmZmZlZTECamZmZmVlMQJqZmZmZWUxAmpmZmZlZTECamZmZmVlMQJqZmZmZWUxAmpmZmZlZTECamZmZmVlMQJqZmZmZWUxAzczMzMxMTEDNzMzMzExMQM3MzMzMTExAzczMzMxMTEDNzMzMzExMQM3MzMzMTExAzczMzMxMTEDNzMzMzExMQM3MzMzMTExAzczMzMxMTEDNzMzMzExMQM3MzMzMTExAzczMzMxMTEDNzMzMzExMQM3MzMzMTExAzczMzMxMTEDNzMzMzExMQM3MzMzMTExAzczMzMxMTEAAAAAAAEBMQAAAAAAAQExAAAAAAABATEAAAAAAAEBMQAAAAAAAQExAAAAAAABATEAAAAAAAEBMQAAAAAAAQExAAAAAAABATEAAAAAAAEBMQAAAAAAAQExAAAAAAABATEAzMzMzMzNMQDMzMzMzM0xAMzMzMzMzTEAzMzMzMzNMQDMzMzMzM0xAMzMzMzMzTEAzMzMzMzNMQDMzMzMzM0xAMzMzMzMzTEAzMzMzMzNMQDMzMzMzM0xAMzMzMzMzTEAzMzMzMzNMQDMzMzMzM0xAMzMzMzMzTEAzMzMzMzNMQDMzMzMzM0xAMzMzMzMzTEBmZmZmZiZMQGZmZmZmJkxAZmZmZmYmTEBmZmZmZiZMQGZmZmZmJkxAZmZmZmYmTEBmZmZmZiZMQGZmZmZmJkxAZmZmZmYmTEBmZmZmZiZMQGZmZmZmJkxAZmZmZmYmTEBmZmZmZiZMQGZmZmZmJkxAZmZmZmYmTEBmZmZmZiZMQGZmZmZmJkxAZmZmZmYmTEBmZmZmZiZMQGZmZmZmJkxAmpmZmZkZTECamZmZmRlMQJqZmZmZGUxAmpmZmZkZTECamZmZmRlMQJqZmZmZGUxAmpmZmZkZTECamZmZmRlMQJqZmZmZGUxAmpmZmZkZTECamZmZmRlMQJqZmZmZGUxAmpmZmZkZTEDNzMzMzAxMQM3MzMzMDExAzczMzMwMTEDNzMzMzAxMQM3MzMzMDExAzczMzMwMTEDNzMzMzAxMQM3MzMzMDExAzczMzMwMTEDNzMzMzAxMQM3MzMzMDExAzczMzMwMTEDNzMzMzAxMQM3MzMzMDExAzczMzMwMTEDNzMzMzAxMQM3MzMzMDExAAAAAAAAATEAAAAAAAABMQAAAAAAAAExAAAAAAAAATEAAAAAAAABMQAAAAAAAAExAAAAAAAAATEAAAAAAAABMQAAAAAAAAExAAAAAAAAATEAAAAAAAABMQAAAAAAAAExAAAAAAAAATEAAAAAAAABMQAAAAAAAAExAAAAAAAAATEAAAAAAAABMQAAAAAAAAExAMzMzMzPzS0AzMzMzM\\u002fNLQDMzMzMz80tAMzMzMzPzS0AzMzMzM\\u002fNLQDMzMzMz80tAMzMzMzPzS0AzMzMzM\\u002fNLQDMzMzMz80tAMzMzMzPzS0AzMzMzM\\u002fNLQGZmZmZm5ktAZmZmZmbmS0BmZmZmZuZLQGZmZmZm5ktAZmZmZmbmS0BmZmZmZuZLQGZmZmZm5ktAZmZmZmbmS0BmZmZmZuZLQGZmZmZm5ktAZmZmZmbmS0BmZmZmZuZLQGZmZmZm5ktAZmZmZmbmS0CamZmZmdlLQJqZmZmZ2UtAmpmZmZnZS0CamZmZmdlLQJqZmZmZ2UtAmpmZmZnZS0CamZmZmdlLQJqZmZmZ2UtAmpmZmZnZS0CamZmZmdlLQJqZmZmZ2UtAmpmZmZnZS0CamZmZmdlLQJqZmZmZ2UtAmpmZmZnZS0CamZmZmdlLQM3MzMzMzEtAzczMzMzMS0DNzMzMzMxLQM3MzMzMzEtAzczMzMzMS0DNzMzMzMxLQM3MzMzMzEtAzczMzMzMS0DNzMzMzMxLQM3MzMzMzEtAzczMzMzMS0DNzMzMzMxLQM3MzMzMzEtAzczMzMzMS0DNzMzMzMxLQM3MzMzMzEtAzczMzMzMS0DNzMzMzMxLQM3MzMzMzEtAzczMzMzMS0DNzMzMzMxLQAAAAAAAwEtAAAAAAADAS0AAAAAAAMBLQAAAAAAAwEtAAAAAAADAS0AAAAAAAMBLQAAAAAAAwEtAAAAAAADAS0AAAAAAAMBLQAAAAAAAwEtAAAAAAADAS0AAAAAAAMBLQDMzMzMzs0tAMzMzMzOzS0AzMzMzM7NLQDMzMzMzs0tAMzMzMzOzS0AzMzMzM7NLQDMzMzMzs0tAMzMzMzOzS0AzMzMzM7NLQDMzMzMzs0tAMzMzMzOzS0AzMzMzM7NLQDMzMzMzs0tAZmZmZmamS0BmZmZmZqZLQGZmZmZmpktAZmZmZmamS0BmZmZmZqZLQGZmZmZmpktAZmZmZmamS0BmZmZmZqZLQGZmZmZmpktAZmZmZmamS0BmZmZmZqZLQGZmZmZmpktAZmZmZmamS0CamZmZmZlLQJqZmZmZmUtAmpmZmZmZS0CamZmZmZlLQJqZmZmZmUtAmpmZmZmZS0CamZmZmZlLQJqZmZmZmUtAmpmZmZmZS0CamZmZmZlLQJqZmZmZmUtAmpmZmZmZS0CamZmZmZlLQJqZmZmZmUtAmpmZmZmZS0CamZmZmZlLQJqZmZmZmUtAmpmZmZmZS0CamZmZmZlLQM3MzMzMjEtAzczMzMyMS0DNzMzMzIxLQM3MzMzMjEtAzczMzMyMS0DNzMzMzIxLQM3MzMzMjEtAzczMzMyMS0DNzMzMzIxLQM3MzMzMjEtAzczMzMyMS0DNzMzMzIxLQM3MzMzMjEtAzczMzMyMS0DNzMzMzIxLQM3MzMzMjEtAAAAAAACAS0AAAAAAAIBLQAAAAAAAgEtAAAAAAACAS0AAAAAAAIBLQAAAAAAAgEtAAAAAAACAS0AAAAAAAIBLQAAAAAAAgEtAAAAAAACAS0AAAAAAAIBLQAAAAAAAgEtAAAAAAACAS0AAAAAAAIBLQAAAAAAAgEtAMzMzMzNzS0AzMzMzM3NLQDMzMzMzc0tAMzMzMzNzS0AzMzMzM3NLQDMzMzMzc0tAMzMzMzNzS0AzMzMzM3NLQDMzMzMzc0tAMzMzMzNzS0AzMzMzM3NLQDMzMzMzc0tAMzMzMzNzS0AzMzMzM3NLQDMzMzMzc0tAMzMzMzNzS0AzMzMzM3NLQDMzMzMzc0tAMzMzMzNzS0AzMzMzM3NLQDMzMzMzc0tAZmZmZmZmS0BmZmZmZmZLQGZmZmZmZktAZmZmZmZmS0BmZmZmZmZLQGZmZmZmZktAZmZmZmZmS0BmZmZmZmZLQGZmZmZmZktAZmZmZmZmS0BmZmZmZmZLQJqZmZmZWUtAmpmZmZlZS0CamZmZmVlLQJqZmZmZWUtAmpmZmZlZS0CamZmZmVlLQJqZmZmZWUtAmpmZmZlZS0CamZmZmVlLQJqZmZmZWUtAmpmZmZlZS0CamZmZmVlLQJqZmZmZWUtAmpmZmZlZS0CamZmZmVlLQJqZmZmZWUtAzczMzMxMS0DNzMzMzExLQM3MzMzMTEtAzczMzMxMS0DNzMzMzExLQM3MzMzMTEtAzczMzMxMS0DNzMzMzExLQM3MzMzMTEtAzczMzMxMS0DNzMzMzExLQM3MzMzMTEtAzczMzMxMS0DNzMzMzExLQM3MzMzMTEtAzczMzMxMS0DNzMzMzExLQM3MzMzMTEtAzczMzMxMS0AAAAAAAEBLQAAAAAAAQEtAAAAAAABAS0AAAAAAAEBLQAAAAAAAQEtAAAAAAABAS0AAAAAAAEBLQAAAAAAAQEtAMzMzMzMzS0AzMzMzMzNLQDMzMzMzM0tAMzMzMzMzS0AzMzMzMzNLQDMzMzMzM0tAMzMzMzMzS0AzMzMzMzNLQDMzMzMzM0tAMzMzMzMzS0AzMzMzMzNLQDMzMzMzM0tAMzMzMzMzS0AzMzMzMzNLQGZmZmZmJktAZmZmZmYmS0BmZmZmZiZLQGZmZmZmJktAZmZmZmYmS0BmZmZmZiZLQGZmZmZmJktAZmZmZmYmS0BmZmZmZiZLQGZmZmZmJktAZmZmZmYmS0CamZmZmRlLQJqZmZmZGUtAmpmZmZkZS0CamZmZmRlLQJqZmZmZGUtAmpmZmZkZS0CamZmZmRlLQJqZmZmZGUtAmpmZmZkZS0CamZmZmRlLQJqZmZmZGUtAmpmZmZkZS0DNzMzMzAxLQM3MzMzMDEtAzczMzMwMS0DNzMzMzAxLQM3MzMzMDEtAzczMzMwMS0DNzMzMzAxLQM3MzMzMDEtAzczMzMwMS0DNzMzMzAxLQM3MzMzMDEtAAAAAAAAAS0AAAAAAAABLQAAAAAAAAEtAAAAAAAAAS0AAAAAAAABLQAAAAAAAAEtAAAAAAAAAS0AAAAAAAABLQAAAAAAAAEtAAAAAAAAAS0AAAAAAAABLQAAAAAAAAEtAAAAAAAAAS0AAAAAAAABLQAAAAAAAAEtAAAAAAAAAS0AAAAAAAABLQAAAAAAAAEtAAAAAAAAAS0AAAAAAAABLQDMzMzMz80pAMzMzMzPzSkAzMzMzM\\u002fNKQDMzMzMz80pAMzMzMzPzSkAzMzMzM\\u002fNKQDMzMzMz80pAMzMzMzPzSkAzMzMzM\\u002fNKQDMzMzMz80pAMzMzMzPzSkAzMzMzM\\u002fNKQDMzMzMz80pAMzMzMzPzSkAzMzMzM\\u002fNKQDMzMzMz80pAMzMzMzPzSkAzMzMzM\\u002fNKQDMzMzMz80pAZmZmZmbmSkBmZmZmZuZKQGZmZmZm5kpAZmZmZmbmSkBmZmZmZuZKQGZmZmZm5kpAZmZmZmbmSkBmZmZmZuZKQGZmZmZm5kpAZmZmZmbmSkBmZmZmZuZKQGZmZmZm5kpAZmZmZmbmSkBmZmZmZuZKQJqZmZmZ2UpAmpmZmZnZSkCamZmZmdlKQJqZmZmZ2UpAmpmZmZnZSkCamZmZmdlKQJqZmZmZ2UpAmpmZmZnZSkCamZmZmdlKQJqZmZmZ2UpAmpmZmZnZSkCamZmZmdlKQJqZmZmZ2UpAmpmZmZnZSkCamZmZmdlKQJqZmZmZ2UpAmpmZmZnZSkCamZmZmdlKQJqZmZmZ2UpAzczMzMzMSkDNzMzMzMxKQM3MzMzMzEpAzczMzMzMSkDNzMzMzMxKQM3MzMzMzEpAzczMzMzMSkDNzMzMzMxKQM3MzMzMzEpAzczMzMzMSkDNzMzMzMxKQM3MzMzMzEpAzczMzMzMSkDNzMzMzMxKQM3MzMzMzEpAAAAAAADASkAAAAAAAMBKQAAAAAAAwEpAAAAAAADASkAAAAAAAMBKQAAAAAAAwEpAAAAAAADASkAAAAAAAMBKQAAAAAAAwEpAAAAAAADASkAAAAAAAMBKQDMzMzMzs0pAMzMzMzOzSkAzMzMzM7NKQDMzMzMzs0pAMzMzMzOzSkAzMzMzM7NKQDMzMzMzs0pAMzMzMzOzSkAzMzMzM7NKQDMzMzMzs0pAMzMzMzOzSkAzMzMzM7NKQDMzMzMzs0pAMzMzMzOzSkAzMzMzM7NKQGZmZmZmpkpAZmZmZmamSkBmZmZmZqZKQGZmZmZmpkpAZmZmZmamSkBmZmZmZqZKQGZmZmZmpkpAZmZmZmamSkBmZmZmZqZKQGZmZmZmpkpAZmZmZmamSkBmZmZmZqZKQGZmZmZmpkpAmpmZmZmZSkCamZmZmZlKQJqZmZmZmUpAmpmZmZmZSkCamZmZmZlKQJqZmZmZmUpAmpmZmZmZSkCamZmZmZlKQM3MzMzMjEpAzczMzMyMSkDNzMzMzIxKQM3MzMzMjEpAzczMzMyMSkDNzMzMzIxKQM3MzMzMjEpAzczMzMyMSkDNzMzMzIxKQM3MzMzMjEpAzczMzMyMSkAAAAAAAIBKQAAAAAAAgEpAAAAAAACASkAAAAAAAIBKQAAAAAAAgEpAAAAAAACASkAAAAAAAIBKQAAAAAAAgEpAAAAAAACASkAAAAAAAIBKQDMzMzMzc0pAMzMzMzNzSkAzMzMzM3NKQDMzMzMzc0pAMzMzMzNzSkAzMzMzM3NKQDMzMzMzc0pAMzMzMzNzSkAzMzMzM3NKQDMzMzMzc0pAMzMzMzNzSkBmZmZmZmZKQGZmZmZmZkpAZmZmZmZmSkBmZmZmZmZKQGZmZmZmZkpAZmZmZmZmSkBmZmZmZmZKQGZmZmZmZkpAZmZmZmZmSkBmZmZmZmZKQGZmZmZmZkpAZmZmZmZmSkCamZmZmVlKQJqZmZmZWUpAmpmZmZlZSkCamZmZmVlKQJqZmZmZWUpAmpmZmZlZSkCamZmZmVlKQJqZmZmZWUpAmpmZmZlZSkCamZmZmVlKQJqZmZmZWUpAmpmZmZlZSkCamZmZmVlKQJqZmZmZWUpAmpmZmZlZSkDNzMzMzExKQM3MzMzMTEpAzczMzMxMSkDNzMzMzExKQM3MzMzMTEpAzczMzMxMSkDNzMzMzExKQM3MzMzMTEpAzczMzMxMSkDNzMzMzExKQM3MzMzMTEpAzczMzMxMSkDNzMzMzExKQAAAAAAAQEpAAAAAAABASkAAAAAAAEBKQAAAAAAAQEpAAAAAAABASkAAAAAAAEBKQAAAAAAAQEpAAAAAAABASkAAAAAAAEBKQAAAAAAAQEpAAAAAAABASkAAAAAAAEBKQAAAAAAAQEpAMzMzMzMzSkAzMzMzMzNKQDMzMzMzM0pAMzMzMzMzSkAzMzMzMzNKQDMzMzMzM0pAMzMzMzMzSkAzMzMzMzNKQDMzMzMzM0pAZmZmZmYmSkBmZmZmZiZKQGZmZmZmJkpAZmZmZmYmSkBmZmZmZiZKQGZmZmZmJkpAZmZmZmYmSkBmZmZmZiZKQGZmZmZmJkpAZmZmZmYmSkBmZmZmZiZKQGZmZmZmJkpAZmZmZmYmSkCamZmZmRlKQJqZmZmZGUpAmpmZmZkZSkCamZmZmRlKQJqZmZmZGUpAmpmZmZkZSkCamZmZmRlKQJqZmZmZGUpAmpmZmZkZSkCamZmZmRlKQM3MzMzMDEpAzczMzMwMSkDNzMzMzAxKQM3MzMzMDEpAzczMzMwMSkDNzMzMzAxKQM3MzMzMDEpAzczMzMwMSkDNzMzMzAxKQAAAAAAAAEpAAAAAAAAASkAAAAAAAABKQAAAAAAAAEpAAAAAAAAASkAAAAAAAABKQAAAAAAAAEpAAAAAAAAASkAAAAAAAABKQAAAAAAAAEpAAAAAAAAASkAAAAAAAABKQAAAAAAAAEpAMzMzMzPzSUAzMzMzM\\u002fNJQDMzMzMz80lAMzMzMzPzSUAzMzMzM\\u002fNJQDMzMzMz80lAMzMzMzPzSUAzMzMzM\\u002fNJQDMzMzMz80lAMzMzMzPzSUAzMzMzM\\u002fNJQGZmZmZm5klAZmZmZmbmSUBmZmZmZuZJQGZmZmZm5klAZmZmZmbmSUBmZmZmZuZJQGZmZmZm5klAZmZmZmbmSUCamZmZmdlJQJqZmZmZ2UlAmpmZmZnZSUCamZmZmdlJQJqZmZmZ2UlAmpmZmZnZSUCamZmZmdlJQJqZmZmZ2UlAmpmZmZnZSUCamZmZmdlJQJqZmZmZ2UlAmpmZmZnZSUDNzMzMzMxJQM3MzMzMzElAzczMzMzMSUDNzMzMzMxJQM3MzMzMzElAzczMzMzMSUDNzMzMzMxJQM3MzMzMzElAzczMzMzMSUDNzMzMzMxJQM3MzMzMzElAzczMzMzMSUAAAAAAAMBJQAAAAAAAwElAAAAAAADASUAAAAAAAMBJQAAAAAAAwElAAAAAAADASUAAAAAAAMBJQAAAAAAAwElAAAAAAADASUAAAAAAAMBJQDMzMzMzs0lAMzMzMzOzSUAzMzMzM7NJQDMzMzMzs0lAMzMzMzOzSUAzMzMzM7NJQDMzMzMzs0lAMzMzMzOzSUAzMzMzM7NJQDMzMzMzs0lAMzMzMzOzSUAzMzMzM7NJQGZmZmZmpklAZmZmZmamSUBmZmZmZqZJQGZmZmZmpklAZmZmZmamSUBmZmZmZqZJQGZmZmZmpklAZmZmZmamSUBmZmZmZqZJQGZmZmZmpklAmpmZmZmZSUCamZmZmZlJQJqZmZmZmUlAmpmZmZmZSUCamZmZmZlJQJqZmZmZmUlAmpmZmZmZSUCamZmZmZlJQM3MzMzMjElAzczMzMyMSUDNzMzMzIxJQM3MzMzMjElAzczMzMyMSUDNzMzMzIxJQM3MzMzMjElAAAAAAACASUAAAAAAAIBJQAAAAAAAgElAAAAAAACASUAAAAAAAIBJQAAAAAAAgElAAAAAAACASUAAAAAAAIBJQAAAAAAAgElAAAAAAACASUAzMzMzM3NJQDMzMzMzc0lAMzMzMzNzSUAzMzMzM3NJQDMzMzMzc0lAMzMzMzNzSUAzMzMzM3NJQDMzMzMzc0lAMzMzMzNzSUAzMzMzM3NJQDMzMzMzc0lAMzMzMzNzSUAzMzMzM3NJQGZmZmZmZklAZmZmZmZmSUBmZmZmZmZJQGZmZmZmZklAmpmZmZlZSUCamZmZmVlJQJqZmZmZWUlAmpmZmZlZSUCamZmZmVlJQJqZmZmZWUlAmpmZmZlZSUCamZmZmVlJQJqZmZmZWUlAmpmZmZlZSUCamZmZmVlJQJqZmZmZWUlAzczMzMxMSUDNzMzMzExJQM3MzMzMTElAzczMzMxMSUDNzMzMzExJQM3MzMzMTElAzczMzMxMSUDNzMzMzExJQM3MzMzMTElAAAAAAABASUAAAAAAAEBJQAAAAAAAQElAAAAAAABASUAAAAAAAEBJQAAAAAAAQElAMzMzMzMzSUAzMzMzMzNJQDMzMzMzM0lAMzMzMzMzSUAzMzMzMzNJQDMzMzMzM0lAMzMzMzMzSUAzMzMzMzNJQGZmZmZmJklAZmZmZmYmSUBmZmZmZiZJQGZmZmZmJklAZmZmZmYmSUBmZmZmZiZJQGZmZmZmJklAmpmZmZkZSUCamZmZmRlJQJqZmZmZGUlAmpmZmZkZSUCamZmZmRlJQJqZmZmZGUlAmpmZmZkZSUCamZmZmRlJQJqZmZmZGUlAzczMzMwMSUDNzMzMzAxJQM3MzMzMDElAzczMzMwMSUDNzMzMzAxJQM3MzMzMDElAAAAAAAAASUAAAAAAAABJQAAAAAAAAElAAAAAAAAASUAAAAAAAABJQAAAAAAAAElAAAAAAAAASUAAAAAAAABJQDMzMzMz80hAMzMzMzPzSEAzMzMzM\\u002fNIQDMzMzMz80hAMzMzMzPzSEAzMzMzM\\u002fNIQDMzMzMz80hAMzMzMzPzSEBmZmZmZuZIQGZmZmZm5khAZmZmZmbmSEBmZmZmZuZIQGZmZmZm5khAZmZmZmbmSEBmZmZmZuZIQGZmZmZm5khAZmZmZmbmSECamZmZmdlIQJqZmZmZ2UhAmpmZmZnZSECamZmZmdlIQJqZmZmZ2UhAmpmZmZnZSEDNzMzMzMxIQM3MzMzMzEhAzczMzMzMSEDNzMzMzMxIQM3MzMzMzEhAzczMzMzMSEDNzMzMzMxIQM3MzMzMzEhAzczMzMzMSEAAAAAAAMBIQAAAAAAAwEhAAAAAAADASEAAAAAAAMBIQAAAAAAAwEhAAAAAAADASEAAAAAAAMBIQAAAAAAAwEhAMzMzMzOzSEAzMzMzM7NIQDMzMzMzs0hAMzMzMzOzSEAzMzMzM7NIQDMzMzMzs0hAZmZmZmamSEBmZmZmZqZIQGZmZmZmpkhAZmZmZmamSEBmZmZmZqZIQGZmZmZmpkhAZmZmZmamSECamZmZmZlIQJqZmZmZmUhAmpmZmZmZSECamZmZmZlIQJqZmZmZmUhAmpmZmZmZSEDNzMzMzIxIQM3MzMzMjEhAzczMzMyMSEDNzMzMzIxIQM3MzMzMjEhAzczMzMyMSEDNzMzMzIxIQAAAAAAAgEhAAAAAAACASEAAAAAAAIBIQAAAAAAAgEhAAAAAAACASEAAAAAAAIBIQDMzMzMzc0hAMzMzMzNzSEAzMzMzM3NIQGZmZmZmZkhAZmZmZmZmSEBmZmZmZmZIQGZmZmZmZkhAZmZmZmZmSEBmZmZmZmZIQGZmZmZmZkhAmpmZmZlZSECamZmZmVlIQJqZmZmZWUhAmpmZmZlZSECamZmZmVlIQJqZmZmZWUhAmpmZmZlZSEDNzMzMzExIQM3MzMzMTEhAzczMzMxMSEDNzMzMzExIQM3MzMzMTEhAzczMzMxMSEAAAAAAAEBIQAAAAAAAQEhAAAAAAABASEAAAAAAAEBIQAAAAAAAQEhAAAAAAABASEAAAAAAAEBIQDMzMzMzM0hAMzMzMzMzSEAzMzMzMzNIQDMzMzMzM0hAMzMzMzMzSEBmZmZmZiZIQGZmZmZmJkhAZmZmZmYmSEBmZmZmZiZIQJqZmZmZGUhAmpmZmZkZSECamZmZmRlIQM3MzMzMDEhAzczMzMwMSEDNzMzMzAxIQAAAAAAAAEhAAAAAAAAASEAAAAAAAABIQAAAAAAAAEhAAAAAAAAASEAAAAAAAABIQAAAAAAAAEhAMzMzMzPzR0AzMzMzM\\u002fNHQDMzMzMz80dAMzMzMzPzR0AzMzMzM\\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\"},\"xaxis\":\"x\",\"yaxis\":\"y\",\"type\":\"histogram\"}],\"layout\":{\"template\":{\"data\":{\"histogram2dcontour\":[{\"type\":\"histogram2dcontour\",\"colorbar\":{\"outlinewidth\":0,\"ticks\":\"\"},\"colorscale\":[[0.0,\"#0d0887\"],[0.1111111111111111,\"#46039f\"],[0.2222222222222222,\"#7201a8\"],[0.3333333333333333,\"#9c179e\"],[0.4444444444444444,\"#bd3786\"],[0.5555555555555556,\"#d8576b\"],[0.6666666666666666,\"#ed7953\"],[0.7777777777777778,\"#fb9f3a\"],[0.8888888888888888,\"#fdca26\"],[1.0,\"#f0f921\"]]}],\"choropleth\":[{\"type\":\"choropleth\",\"colorbar\":{\"outlinewidth\":0,\"ticks\":\"\"}}],\"histogram2d\":[{\"type\":\"histogram2d\",\"colorbar\":{\"outlinewidth\":0,\"ticks\":\"\"},\"colorscale\":[[0.0,\"#0d0887\"],[0.1111111111111111,\"#46039f\"],[0.2222222222222222,\"#7201a8\"],[0.3333333333333333,\"#9c179e\"],[0.4444444444444444,\"#bd3786\"],[0.5555555555555556,\"#d8576b\"],[0.6666666666666666,\"#ed7953\"],[0.7777777777777778,\"#fb9f3a\"],[0.8888888888888888,\"#fdca26\"],[1.0,\"#f0f921\"]]}],\"heatmap\":[{\"type\":\"heatmap\",\"colorbar\":{\"outlinewidth\":0,\"ticks\":\"\"},\"colorscale\":[[0.0,\"#0d0887\"],[0.1111111111111111,\"#46039f\"],[0.2222222222222222,\"#7201a8\"],[0.3333333333333333,\"#9c179e\"],[0.4444444444444444,\"#bd3786\"],[0.5555555555555556,\"#d8576b\"],[0.6666666666666666,\"#ed7953\"],[0.7777777777777778,\"#fb9f3a\"],[0.8888888888888888,\"#fdca26\"],[1.0,\"#f0f921\"]]}],\"contourcarpet\":[{\"type\":\"contourcarpet\",\"colorbar\":{\"outlinewidth\":0,\"ticks\":\"\"}}],\"contour\":[{\"type\":\"contour\",\"colorbar\":{\"outlinewidth\":0,\"ticks\":\"\"},\"colorscale\":[[0.0,\"#0d0887\"],[0.1111111111111111,\"#46039f\"],[0.2222222222222222,\"#7201a8\"],[0.3333333333333333,\"#9c179e\"],[0.4444444444444444,\"#bd3786\"],[0.5555555555555556,\"#d8576b\"],[0.6666666666666666,\"#ed7953\"],[0.7777777777777778,\"#fb9f3a\"],[0.8888888888888888,\"#fdca26\"],[1.0,\"#f0f921\"]]}],\"surface\":[{\"type\":\"surface\",\"colorbar\":{\"outlinewidth\":0,\"ticks\":\"\"},\"colorscale\":[[0.0,\"#0d0887\"],[0.1111111111111111,\"#46039f\"],[0.2222222222222222,\"#7201a8\"],[0.3333333333333333,\"#9c179e\"],[0.4444444444444444,\"#bd3786\"],[0.5555555555555556,\"#d8576b\"],[0.6666666666666666,\"#ed7953\"],[0.7777777777777778,\"#fb9f3a\"],[0.8888888888888888,\"#fdca26\"],[1.0,\"#f0f921\"]]}],\"mesh3d\":[{\"type\":\"mesh3d\",\"colorbar\":{\"outlinewidth\":0,\"ticks\":\"\"}}],\"scatter\":[{\"fillpattern\":{\"fillmode\":\"overlay\",\"size\":10,\"solidity\":0.2},\"type\":\"scatter\"}],\"parcoords\":[{\"type\":\"parcoords\",\"line\":{\"colorbar\":{\"outlinewidth\":0,\"ticks\":\"\"}}}],\"scatterpolargl\":[{\"type\":\"scatterpolargl\",\"marker\":{\"colorbar\":{\"outlinewidth\":0,\"ticks\":\"\"}}}],\"bar\":[{\"error_x\":{\"color\":\"#2a3f5f\"},\"error_y\":{\"color\":\"#2a3f5f\"},\"marker\":{\"line\":{\"color\":\"#E5ECF6\",\"width\":0.5},\"pattern\":{\"fillmode\":\"overlay\",\"size\":10,\"solidity\":0.2}},\"type\":\"bar\"}],\"scattergeo\":[{\"type\":\"scattergeo\",\"marker\":{\"colorbar\":{\"outlinewidth\":0,\"ticks\":\"\"}}}],\"scatterpolar\":[{\"type\":\"scatterpolar\",\"marker\":{\"colorbar\":{\"outlinewidth\":0,\"ticks\":\"\"}}}],\"histogram\":[{\"marker\":{\"pattern\":{\"fillmode\":\"overlay\",\"size\":10,\"solidity\":0.2}},\"type\":\"histogram\"}],\"scattergl\":[{\"type\":\"scattergl\",\"marker\":{\"colorbar\":{\"outlinewidth\":0,\"ticks\":\"\"}}}],\"scatter3d\":[{\"type\":\"scatter3d\",\"line\":{\"colorbar\":{\"outlinewidth\":0,\"ticks\":\"\"}},\"marker\":{\"colorbar\":{\"outlinewidth\":0,\"ticks\":\"\"}}}],\"scattermap\":[{\"type\":\"scattermap\",\"marker\":{\"colorbar\":{\"outlinewidth\":0,\"ticks\":\"\"}}}],\"scattermapbox\":[{\"type\":\"scattermapbox\",\"marker\":{\"colorbar\":{\"outlinewidth\":0,\"ticks\":\"\"}}}],\"scatterternary\":[{\"type\":\"scatterternary\",\"marker\":{\"colorbar\":{\"outlinewidth\":0,\"ticks\":\"\"}}}],\"scattercarpet\":[{\"type\":\"scattercarpet\",\"marker\":{\"colorbar\":{\"outlinewidth\":0,\"ticks\":\"\"}}}],\"carpet\":[{\"aaxis\":{\"endlinecolor\":\"#2a3f5f\",\"gridcolor\":\"white\",\"linecolor\":\"white\",\"minorgridcolor\":\"white\",\"startlinecolor\":\"#2a3f5f\"},\"baxis\":{\"endlinecolor\":\"#2a3f5f\",\"gridcolor\":\"white\",\"linecolor\":\"white\",\"minorgridcolor\":\"white\",\"startlinecolor\":\"#2a3f5f\"},\"type\":\"carpet\"}],\"table\":[{\"cells\":{\"fill\":{\"color\":\"#EBF0F8\"},\"line\":{\"color\":\"white\"}},\"header\":{\"fill\":{\"color\":\"#C8D4E3\"},\"line\":{\"color\":\"white\"}},\"type\":\"table\"}],\"barpolar\":[{\"marker\":{\"line\":{\"color\":\"#E5ECF6\",\"width\":0.5},\"pattern\":{\"fillmode\":\"overlay\",\"size\":10,\"solidity\":0.2}},\"type\":\"barpolar\"}],\"pie\":[{\"automargin\":true,\"type\":\"pie\"}]},\"layout\":{\"autotypenumbers\":\"strict\",\"colorway\":[\"#636efa\",\"#EF553B\",\"#00cc96\",\"#ab63fa\",\"#FFA15A\",\"#19d3f3\",\"#FF6692\",\"#B6E880\",\"#FF97FF\",\"#FECB52\"],\"font\":{\"color\":\"#2a3f5f\"},\"hovermode\":\"closest\",\"hoverlabel\":{\"align\":\"left\"},\"paper_bgcolor\":\"white\",\"plot_bgcolor\":\"#E5ECF6\",\"polar\":{\"bgcolor\":\"#E5ECF6\",\"angularaxis\":{\"gridcolor\":\"white\",\"linecolor\":\"white\",\"ticks\":\"\"},\"radialaxis\":{\"gridcolor\":\"white\",\"linecolor\":\"white\",\"ticks\":\"\"}},\"ternary\":{\"bgcolor\":\"#E5ECF6\",\"aaxis\":{\"gridcolor\":\"white\",\"linecolor\":\"white\",\"ticks\":\"\"},\"baxis\":{\"gridcolor\":\"white\",\"linecolor\":\"white\",\"ticks\":\"\"},\"caxis\":{\"gridcolor\":\"white\",\"linecolor\":\"white\",\"ticks\":\"\"}},\"coloraxis\":{\"colorbar\":{\"outlinewidth\":0,\"ticks\":\"\"}},\"colorscale\":{\"sequential\":[[0.0,\"#0d0887\"],[0.1111111111111111,\"#46039f\"],[0.2222222222222222,\"#7201a8\"],[0.3333333333333333,\"#9c179e\"],[0.4444444444444444,\"#bd3786\"],[0.5555555555555556,\"#d8576b\"],[0.6666666666666666,\"#ed7953\"],[0.7777777777777778,\"#fb9f3a\"],[0.8888888888888888,\"#fdca26\"],[1.0,\"#f0f921\"]],\"sequentialminus\":[[0.0,\"#0d0887\"],[0.1111111111111111,\"#46039f\"],[0.2222222222222222,\"#7201a8\"],[0.3333333333333333,\"#9c179e\"],[0.4444444444444444,\"#bd3786\"],[0.5555555555555556,\"#d8576b\"],[0.6666666666666666,\"#ed7953\"],[0.7777777777777778,\"#fb9f3a\"],[0.8888888888888888,\"#fdca26\"],[1.0,\"#f0f921\"]],\"diverging\":[[0,\"#8e0152\"],[0.1,\"#c51b7d\"],[0.2,\"#de77ae\"],[0.3,\"#f1b6da\"],[0.4,\"#fde0ef\"],[0.5,\"#f7f7f7\"],[0.6,\"#e6f5d0\"],[0.7,\"#b8e186\"],[0.8,\"#7fbc41\"],[0.9,\"#4d9221\"],[1,\"#276419\"]]},\"xaxis\":{\"gridcolor\":\"white\",\"linecolor\":\"white\",\"ticks\":\"\",\"title\":{\"standoff\":15},\"zerolinecolor\":\"white\",\"automargin\":true,\"zerolinewidth\":2},\"yaxis\":{\"gridcolor\":\"white\",\"linecolor\":\"white\",\"ticks\":\"\",\"title\":{\"standoff\":15},\"zerolinecolor\":\"white\",\"automargin\":true,\"zerolinewidth\":2},\"scene\":{\"xaxis\":{\"backgroundcolor\":\"#E5ECF6\",\"gridcolor\":\"white\",\"linecolor\":\"white\",\"showbackground\":true,\"ticks\":\"\",\"zerolinecolor\":\"white\",\"gridwidth\":2},\"yaxis\":{\"backgroundcolor\":\"#E5ECF6\",\"gridcolor\":\"white\",\"linecolor\":\"white\",\"showbackground\":true,\"ticks\":\"\",\"zerolinecolor\":\"white\",\"gridwidth\":2},\"zaxis\":{\"backgroundcolor\":\"#E5ECF6\",\"gridcolor\":\"white\",\"linecolor\":\"white\",\"showbackground\":true,\"ticks\":\"\",\"zerolinecolor\":\"white\",\"gridwidth\":2}},\"shapedefaults\":{\"line\":{\"color\":\"#2a3f5f\"}},\"annotationdefaults\":{\"arrowcolor\":\"#2a3f5f\",\"arrowhead\":0,\"arrowwidth\":1},\"geo\":{\"bgcolor\":\"white\",\"landcolor\":\"#E5ECF6\",\"subunitcolor\":\"white\",\"showland\":true,\"showlakes\":true,\"lakecolor\":\"white\"},\"title\":{\"x\":0.05},\"mapbox\":{\"style\":\"light\"}}},\"xaxis\":{\"anchor\":\"y\",\"domain\":[0.0,1.0],\"title\":{\"text\":\"Score\"}},\"yaxis\":{\"anchor\":\"x\",\"domain\":[0.0,1.0],\"title\":{\"text\":\"count\"}},\"legend\":{\"tracegroupgap\":0},\"title\":{\"text\":\"Distribui\\u00e7\\u00e3o de Scores\"},\"barmode\":\"relative\",\"shapes\":[{\"line\":{\"color\":\"#e74c3c\",\"dash\":\"dash\"},\"type\":\"line\",\"x0\":73.4,\"x1\":73.4,\"xref\":\"x\",\"y0\":0,\"y1\":1,\"yref\":\"y domain\"},{\"line\":{\"color\":\"#e67e22\",\"dash\":\"dash\"},\"type\":\"line\",\"x0\":66.2,\"x1\":66.2,\"xref\":\"x\",\"y0\":0,\"y1\":1,\"yref\":\"y domain\"}],\"annotations\":[{\"showarrow\":false,\"text\":\"Quente (73)\",\"x\":73.4,\"xanchor\":\"left\",\"xref\":\"x\",\"y\":1,\"yanchor\":\"top\",\"yref\":\"y domain\"},{\"showarrow\":false,\"text\":\"Morno (66)\",\"x\":66.2,\"xanchor\":\"left\",\"xref\":\"x\",\"y\":1,\"yanchor\":\"top\",\"yref\":\"y domain\"}],\"margin\":{\"t\":40,\"b\":20}}}", "factors": "{\"data\":[{\"hovertemplate\":\"Fator=%{x}\\u003cbr\\u003e% do m\\u00e1ximo=%{y}\\u003cbr\\u003ecolor=%{marker.color}\\u003cextra\\u003e\\u003c\\u002fextra\\u003e\",\"legendgroup\":\"\",\"marker\":{\"color\":{\"dtype\":\"f8\",\"bdata\":\"n8fmpvbfVEAwQ\\u002fYTFzdOQBUISerSgk9Af3oem5u6TEAu7sospGJGQA==\"},\"coloraxis\":\"coloraxis\",\"pattern\":{\"shape\":\"\"}},\"name\":\"\",\"orientation\":\"v\",\"showlegend\":false,\"textposition\":\"auto\",\"x\":[\"Stage\",\"Potencial\",\"Velocidade\",\"Conta\",\"Agente\"],\"xaxis\":\"x\",\"y\":{\"dtype\":\"f8\",\"bdata\":\"n8fmpvbfVEAwQ\\u002fYTFzdOQBUISerSgk9Af3oem5u6TEAu7sospGJGQA==\"},\"yaxis\":\"y\",\"type\":\"bar\"}],\"layout\":{\"template\":{\"data\":{\"histogram2dcontour\":[{\"type\":\"histogram2dcontour\",\"colorbar\":{\"outlinewidth\":0,\"ticks\":\"\"},\"colorscale\":[[0.0,\"#0d0887\"],[0.1111111111111111,\"#46039f\"],[0.2222222222222222,\"#7201a8\"],[0.3333333333333333,\"#9c179e\"],[0.4444444444444444,\"#bd3786\"],[0.5555555555555556,\"#d8576b\"],[0.6666666666666666,\"#ed7953\"],[0.7777777777777778,\"#fb9f3a\"],[0.8888888888888888,\"#fdca26\"],[1.0,\"#f0f921\"]]}],\"choropleth\":[{\"type\":\"choropleth\",\"colorbar\":{\"outlinewidth\":0,\"ticks\":\"\"}}],\"histogram2d\":[{\"type\":\"histogram2d\",\"colorbar\":{\"outlinewidth\":0,\"ticks\":\"\"},\"colorscale\":[[0.0,\"#0d0887\"],[0.1111111111111111,\"#46039f\"],[0.2222222222222222,\"#7201a8\"],[0.3333333333333333,\"#9c179e\"],[0.4444444444444444,\"#bd3786\"],[0.5555555555555556,\"#d8576b\"],[0.6666666666666666,\"#ed7953\"],[0.7777777777777778,\"#fb9f3a\"],[0.8888888888888888,\"#fdca26\"],[1.0,\"#f0f921\"]]}],\"heatmap\":[{\"type\":\"heatmap\",\"colorbar\":{\"outlinewidth\":0,\"ticks\":\"\"},\"colorscale\":[[0.0,\"#0d0887\"],[0.1111111111111111,\"#46039f\"],[0.2222222222222222,\"#7201a8\"],[0.3333333333333333,\"#9c179e\"],[0.4444444444444444,\"#bd3786\"],[0.5555555555555556,\"#d8576b\"],[0.6666666666666666,\"#ed7953\"],[0.7777777777777778,\"#fb9f3a\"],[0.8888888888888888,\"#fdca26\"],[1.0,\"#f0f921\"]]}],\"contourcarpet\":[{\"type\":\"contourcarpet\",\"colorbar\":{\"outlinewidth\":0,\"ticks\":\"\"}}],\"contour\":[{\"type\":\"contour\",\"colorbar\":{\"outlinewidth\":0,\"ticks\":\"\"},\"colorscale\":[[0.0,\"#0d0887\"],[0.1111111111111111,\"#46039f\"],[0.2222222222222222,\"#7201a8\"],[0.3333333333333333,\"#9c179e\"],[0.4444444444444444,\"#bd3786\"],[0.5555555555555556,\"#d8576b\"],[0.6666666666666666,\"#ed7953\"],[0.7777777777777778,\"#fb9f3a\"],[0.8888888888888888,\"#fdca26\"],[1.0,\"#f0f921\"]]}],\"surface\":[{\"type\":\"surface\",\"colorbar\":{\"outlinewidth\":0,\"ticks\":\"\"},\"colorscale\":[[0.0,\"#0d0887\"],[0.1111111111111111,\"#46039f\"],[0.2222222222222222,\"#7201a8\"],[0.3333333333333333,\"#9c179e\"],[0.4444444444444444,\"#bd3786\"],[0.5555555555555556,\"#d8576b\"],[0.6666666666666666,\"#ed7953\"],[0.7777777777777778,\"#fb9f3a\"],[0.8888888888888888,\"#fdca26\"],[1.0,\"#f0f921\"]]}],\"mesh3d\":[{\"type\":\"mesh3d\",\"colorbar\":{\"outlinewidth\":0,\"ticks\":\"\"}}],\"scatter\":[{\"fillpattern\":{\"fillmode\":\"overlay\",\"size\":10,\"solidity\":0.2},\"type\":\"scatter\"}],\"parcoords\":[{\"type\":\"parcoords\",\"line\":{\"colorbar\":{\"outlinewidth\":0,\"ticks\":\"\"}}}],\"scatterpolargl\":[{\"type\":\"scatterpolargl\",\"marker\":{\"colorbar\":{\"outlinewidth\":0,\"ticks\":\"\"}}}],\"bar\":[{\"error_x\":{\"color\":\"#2a3f5f\"},\"error_y\":{\"color\":\"#2a3f5f\"},\"marker\":{\"line\":{\"color\":\"#E5ECF6\",\"width\":0.5},\"pattern\":{\"fillmode\":\"overlay\",\"size\":10,\"solidity\":0.2}},\"type\":\"bar\"}],\"scattergeo\":[{\"type\":\"scattergeo\",\"marker\":{\"colorbar\":{\"outlinewidth\":0,\"ticks\":\"\"}}}],\"scatterpolar\":[{\"type\":\"scatterpolar\",\"marker\":{\"colorbar\":{\"outlinewidth\":0,\"ticks\":\"\"}}}],\"histogram\":[{\"marker\":{\"pattern\":{\"fillmode\":\"overlay\",\"size\":10,\"solidity\":0.2}},\"type\":\"histogram\"}],\"scattergl\":[{\"type\":\"scattergl\",\"marker\":{\"colorbar\":{\"outlinewidth\":0,\"ticks\":\"\"}}}],\"scatter3d\":[{\"type\":\"scatter3d\",\"line\":{\"colorbar\":{\"outlinewidth\":0,\"ticks\":\"\"}},\"marker\":{\"colorbar\":{\"outlinewidth\":0,\"ticks\":\"\"}}}],\"scattermap\":[{\"type\":\"scattermap\",\"marker\":{\"colorbar\":{\"outlinewidth\":0,\"ticks\":\"\"}}}],\"scattermapbox\":[{\"type\":\"scattermapbox\",\"marker\":{\"colorbar\":{\"outlinewidth\":0,\"ticks\":\"\"}}}],\"scatterternary\":[{\"type\":\"scatterternary\",\"marker\":{\"colorbar\":{\"outlinewidth\":0,\"ticks\":\"\"}}}],\"scattercarpet\":[{\"type\":\"scattercarpet\",\"marker\":{\"colorbar\":{\"outlinewidth\":0,\"ticks\":\"\"}}}],\"carpet\":[{\"aaxis\":{\"endlinecolor\":\"#2a3f5f\",\"gridcolor\":\"white\",\"linecolor\":\"white\",\"minorgridcolor\":\"white\",\"startlinecolor\":\"#2a3f5f\"},\"baxis\":{\"endlinecolor\":\"#2a3f5f\",\"gridcolor\":\"white\",\"linecolor\":\"white\",\"minorgridcolor\":\"white\",\"startlinecolor\":\"#2a3f5f\"},\"type\":\"carpet\"}],\"table\":[{\"cells\":{\"fill\":{\"color\":\"#EBF0F8\"},\"line\":{\"color\":\"white\"}},\"header\":{\"fill\":{\"color\":\"#C8D4E3\"},\"line\":{\"color\":\"white\"}},\"type\":\"table\"}],\"barpolar\":[{\"marker\":{\"line\":{\"color\":\"#E5ECF6\",\"width\":0.5},\"pattern\":{\"fillmode\":\"overlay\",\"size\":10,\"solidity\":0.2}},\"type\":\"barpolar\"}],\"pie\":[{\"automargin\":true,\"type\":\"pie\"}]},\"layout\":{\"autotypenumbers\":\"strict\",\"colorway\":[\"#636efa\",\"#EF553B\",\"#00cc96\",\"#ab63fa\",\"#FFA15A\",\"#19d3f3\",\"#FF6692\",\"#B6E880\",\"#FF97FF\",\"#FECB52\"],\"font\":{\"color\":\"#2a3f5f\"},\"hovermode\":\"closest\",\"hoverlabel\":{\"align\":\"left\"},\"paper_bgcolor\":\"white\",\"plot_bgcolor\":\"#E5ECF6\",\"polar\":{\"bgcolor\":\"#E5ECF6\",\"angularaxis\":{\"gridcolor\":\"white\",\"linecolor\":\"white\",\"ticks\":\"\"},\"radialaxis\":{\"gridcolor\":\"white\",\"linecolor\":\"white\",\"ticks\":\"\"}},\"ternary\":{\"bgcolor\":\"#E5ECF6\",\"aaxis\":{\"gridcolor\":\"white\",\"linecolor\":\"white\",\"ticks\":\"\"},\"baxis\":{\"gridcolor\":\"white\",\"linecolor\":\"white\",\"ticks\":\"\"},\"caxis\":{\"gridcolor\":\"white\",\"linecolor\":\"white\",\"ticks\":\"\"}},\"coloraxis\":{\"colorbar\":{\"outlinewidth\":0,\"ticks\":\"\"}},\"colorscale\":{\"sequential\":[[0.0,\"#0d0887\"],[0.1111111111111111,\"#46039f\"],[0.2222222222222222,\"#7201a8\"],[0.3333333333333333,\"#9c179e\"],[0.4444444444444444,\"#bd3786\"],[0.5555555555555556,\"#d8576b\"],[0.6666666666666666,\"#ed7953\"],[0.7777777777777778,\"#fb9f3a\"],[0.8888888888888888,\"#fdca26\"],[1.0,\"#f0f921\"]],\"sequentialminus\":[[0.0,\"#0d0887\"],[0.1111111111111111,\"#46039f\"],[0.2222222222222222,\"#7201a8\"],[0.3333333333333333,\"#9c179e\"],[0.4444444444444444,\"#bd3786\"],[0.5555555555555556,\"#d8576b\"],[0.6666666666666666,\"#ed7953\"],[0.7777777777777778,\"#fb9f3a\"],[0.8888888888888888,\"#fdca26\"],[1.0,\"#f0f921\"]],\"diverging\":[[0,\"#8e0152\"],[0.1,\"#c51b7d\"],[0.2,\"#de77ae\"],[0.3,\"#f1b6da\"],[0.4,\"#fde0ef\"],[0.5,\"#f7f7f7\"],[0.6,\"#e6f5d0\"],[0.7,\"#b8e186\"],[0.8,\"#7fbc41\"],[0.9,\"#4d9221\"],[1,\"#276419\"]]},\"xaxis\":{\"gridcolor\":\"white\",\"linecolor\":\"white\",\"ticks\":\"\",\"title\":{\"standoff\":15},\"zerolinecolor\":\"white\",\"automargin\":true,\"zerolinewidth\":2},\"yaxis\":{\"gridcolor\":\"white\",\"linecolor\":\"white\",\"ticks\":\"\",\"title\":{\"standoff\":15},\"zerolinecolor\":\"white\",\"automargin\":true,\"zerolinewidth\":2},\"scene\":{\"xaxis\":{\"backgroundcolor\":\"#E5ECF6\",\"gridcolor\":\"white\",\"linecolor\":\"white\",\"showbackground\":true,\"ticks\":\"\",\"zerolinecolor\":\"white\",\"gridwidth\":2},\"yaxis\":{\"backgroundcolor\":\"#E5ECF6\",\"gridcolor\":\"white\",\"linecolor\":\"white\",\"showbackground\":true,\"ticks\":\"\",\"zerolinecolor\":\"white\",\"gridwidth\":2},\"zaxis\":{\"backgroundcolor\":\"#E5ECF6\",\"gridcolor\":\"white\",\"linecolor\":\"white\",\"showbackground\":true,\"ticks\":\"\",\"zerolinecolor\":\"white\",\"gridwidth\":2}},\"shapedefaults\":{\"line\":{\"color\":\"#2a3f5f\"}},\"annotationdefaults\":{\"arrowcolor\":\"#2a3f5f\",\"arrowhead\":0,\"arrowwidth\":1},\"geo\":{\"bgcolor\":\"white\",\"landcolor\":\"#E5ECF6\",\"subunitcolor\":\"white\",\"showland\":true,\"showlakes\":true,\"lakecolor\":\"white\"},\"title\":{\"x\":0.05},\"mapbox\":{\"style\":\"light\"}}},\"xaxis\":{\"anchor\":\"y\",\"domain\":[0.0,1.0],\"title\":{\"text\":\"Fator\"}},\"yaxis\":{\"anchor\":\"x\",\"domain\":[0.0,1.0],\"title\":{\"text\":\"% do m\\u00e1ximo\"},\"range\":[0,100]},\"coloraxis\":{\"colorbar\":{\"title\":{\"text\":\"color\"}},\"colorscale\":[[0.0,\"rgb(165,0,38)\"],[0.1,\"rgb(215,48,39)\"],[0.2,\"rgb(244,109,67)\"],[0.3,\"rgb(253,174,97)\"],[0.4,\"rgb(254,224,139)\"],[0.5,\"rgb(255,255,191)\"],[0.6,\"rgb(217,239,139)\"],[0.7,\"rgb(166,217,106)\"],[0.8,\"rgb(102,189,99)\"],[0.9,\"rgb(26,152,80)\"],[1.0,\"rgb(0,104,55)\"]]},\"legend\":{\"tracegroupgap\":0},\"title\":{\"text\":\"Aproveitamento m\\u00e9dio por fator (%)\"},\"barmode\":\"relative\"}}", "cleanup": "{\"data\":[{\"marker\":{\"color\":[\"#8e44ad\",\"#e67e22\",\"#e74c3c\"]},\"text\":[\"2652\",\"965\",\"0\"],\"textposition\":\"outside\",\"x\":[\"\\ud83e\\udddf Zombies\",\"\\u2753 N\\u00e3o qualificados\",\"\\ud83d\\udcc5 Overdue\"],\"y\":[2652,965,0],\"type\":\"bar\"}],\"layout\":{\"template\":{\"data\":{\"histogram2dcontour\":[{\"type\":\"histogram2dcontour\",\"colorbar\":{\"outlinewidth\":0,\"ticks\":\"\"},\"colorscale\":[[0.0,\"#0d0887\"],[0.1111111111111111,\"#46039f\"],[0.2222222222222222,\"#7201a8\"],[0.3333333333333333,\"#9c179e\"],[0.4444444444444444,\"#bd3786\"],[0.5555555555555556,\"#d8576b\"],[0.6666666666666666,\"#ed7953\"],[0.7777777777777778,\"#fb9f3a\"],[0.8888888888888888,\"#fdca26\"],[1.0,\"#f0f921\"]]}],\"choropleth\":[{\"type\":\"choropleth\",\"colorbar\":{\"outlinewidth\":0,\"ticks\":\"\"}}],\"histogram2d\":[{\"type\":\"histogram2d\",\"colorbar\":{\"outlinewidth\":0,\"ticks\":\"\"},\"colorscale\":[[0.0,\"#0d0887\"],[0.1111111111111111,\"#46039f\"],[0.2222222222222222,\"#7201a8\"],[0.3333333333333333,\"#9c179e\"],[0.4444444444444444,\"#bd3786\"],[0.5555555555555556,\"#d8576b\"],[0.6666666666666666,\"#ed7953\"],[0.7777777777777778,\"#fb9f3a\"],[0.8888888888888888,\"#fdca26\"],[1.0,\"#f0f921\"]]}],\"heatmap\":[{\"type\":\"heatmap\",\"colorbar\":{\"outlinewidth\":0,\"ticks\":\"\"},\"colorscale\":[[0.0,\"#0d0887\"],[0.1111111111111111,\"#46039f\"],[0.2222222222222222,\"#7201a8\"],[0.3333333333333333,\"#9c179e\"],[0.4444444444444444,\"#bd3786\"],[0.5555555555555556,\"#d8576b\"],[0.6666666666666666,\"#ed7953\"],[0.7777777777777778,\"#fb9f3a\"],[0.8888888888888888,\"#fdca26\"],[1.0,\"#f0f921\"]]}],\"contourcarpet\":[{\"type\":\"contourcarpet\",\"colorbar\":{\"outlinewidth\":0,\"ticks\":\"\"}}],\"contour\":[{\"type\":\"contour\",\"colorbar\":{\"outlinewidth\":0,\"ticks\":\"\"},\"colorscale\":[[0.0,\"#0d0887\"],[0.1111111111111111,\"#46039f\"],[0.2222222222222222,\"#7201a8\"],[0.3333333333333333,\"#9c179e\"],[0.4444444444444444,\"#bd3786\"],[0.5555555555555556,\"#d8576b\"],[0.6666666666666666,\"#ed7953\"],[0.7777777777777778,\"#fb9f3a\"],[0.8888888888888888,\"#fdca26\"],[1.0,\"#f0f921\"]]}],\"surface\":[{\"type\":\"surface\",\"colorbar\":{\"outlinewidth\":0,\"ticks\":\"\"},\"colorscale\":[[0.0,\"#0d0887\"],[0.1111111111111111,\"#46039f\"],[0.2222222222222222,\"#7201a8\"],[0.3333333333333333,\"#9c179e\"],[0.4444444444444444,\"#bd3786\"],[0.5555555555555556,\"#d8576b\"],[0.6666666666666666,\"#ed7953\"],[0.7777777777777778,\"#fb9f3a\"],[0.8888888888888888,\"#fdca26\"],[1.0,\"#f0f921\"]]}],\"mesh3d\":[{\"type\":\"mesh3d\",\"colorbar\":{\"outlinewidth\":0,\"ticks\":\"\"}}],\"scatter\":[{\"fillpattern\":{\"fillmode\":\"overlay\",\"size\":10,\"solidity\":0.2},\"type\":\"scatter\"}],\"parcoords\":[{\"type\":\"parcoords\",\"line\":{\"colorbar\":{\"outlinewidth\":0,\"ticks\":\"\"}}}],\"scatterpolargl\":[{\"type\":\"scatterpolargl\",\"marker\":{\"colorbar\":{\"outlinewidth\":0,\"ticks\":\"\"}}}],\"bar\":[{\"error_x\":{\"color\":\"#2a3f5f\"},\"error_y\":{\"color\":\"#2a3f5f\"},\"marker\":{\"line\":{\"color\":\"#E5ECF6\",\"width\":0.5},\"pattern\":{\"fillmode\":\"overlay\",\"size\":10,\"solidity\":0.2}},\"type\":\"bar\"}],\"scattergeo\":[{\"type\":\"scattergeo\",\"marker\":{\"colorbar\":{\"outlinewidth\":0,\"ticks\":\"\"}}}],\"scatterpolar\":[{\"type\":\"scatterpolar\",\"marker\":{\"colorbar\":{\"outlinewidth\":0,\"ticks\":\"\"}}}],\"histogram\":[{\"marker\":{\"pattern\":{\"fillmode\":\"overlay\",\"size\":10,\"solidity\":0.2}},\"type\":\"histogram\"}],\"scattergl\":[{\"type\":\"scattergl\",\"marker\":{\"colorbar\":{\"outlinewidth\":0,\"ticks\":\"\"}}}],\"scatter3d\":[{\"type\":\"scatter3d\",\"line\":{\"colorbar\":{\"outlinewidth\":0,\"ticks\":\"\"}},\"marker\":{\"colorbar\":{\"outlinewidth\":0,\"ticks\":\"\"}}}],\"scattermap\":[{\"type\":\"scattermap\",\"marker\":{\"colorbar\":{\"outlinewidth\":0,\"ticks\":\"\"}}}],\"scattermapbox\":[{\"type\":\"scattermapbox\",\"marker\":{\"colorbar\":{\"outlinewidth\":0,\"ticks\":\"\"}}}],\"scatterternary\":[{\"type\":\"scatterternary\",\"marker\":{\"colorbar\":{\"outlinewidth\":0,\"ticks\":\"\"}}}],\"scattercarpet\":[{\"type\":\"scattercarpet\",\"marker\":{\"colorbar\":{\"outlinewidth\":0,\"ticks\":\"\"}}}],\"carpet\":[{\"aaxis\":{\"endlinecolor\":\"#2a3f5f\",\"gridcolor\":\"white\",\"linecolor\":\"white\",\"minorgridcolor\":\"white\",\"startlinecolor\":\"#2a3f5f\"},\"baxis\":{\"endlinecolor\":\"#2a3f5f\",\"gridcolor\":\"white\",\"linecolor\":\"white\",\"minorgridcolor\":\"white\",\"startlinecolor\":\"#2a3f5f\"},\"type\":\"carpet\"}],\"table\":[{\"cells\":{\"fill\":{\"color\":\"#EBF0F8\"},\"line\":{\"color\":\"white\"}},\"header\":{\"fill\":{\"color\":\"#C8D4E3\"},\"line\":{\"color\":\"white\"}},\"type\":\"table\"}],\"barpolar\":[{\"marker\":{\"line\":{\"color\":\"#E5ECF6\",\"width\":0.5},\"pattern\":{\"fillmode\":\"overlay\",\"size\":10,\"solidity\":0.2}},\"type\":\"barpolar\"}],\"pie\":[{\"automargin\":true,\"type\":\"pie\"}]},\"layout\":{\"autotypenumbers\":\"strict\",\"colorway\":[\"#636efa\",\"#EF553B\",\"#00cc96\",\"#ab63fa\",\"#FFA15A\",\"#19d3f3\",\"#FF6692\",\"#B6E880\",\"#FF97FF\",\"#FECB52\"],\"font\":{\"color\":\"#2a3f5f\"},\"hovermode\":\"closest\",\"hoverlabel\":{\"align\":\"left\"},\"paper_bgcolor\":\"white\",\"plot_bgcolor\":\"#E5ECF6\",\"polar\":{\"bgcolor\":\"#E5ECF6\",\"angularaxis\":{\"gridcolor\":\"white\",\"linecolor\":\"white\",\"ticks\":\"\"},\"radialaxis\":{\"gridcolor\":\"white\",\"linecolor\":\"white\",\"ticks\":\"\"}},\"ternary\":{\"bgcolor\":\"#E5ECF6\",\"aaxis\":{\"gridcolor\":\"white\",\"linecolor\":\"white\",\"ticks\":\"\"},\"baxis\":{\"gridcolor\":\"white\",\"linecolor\":\"white\",\"ticks\":\"\"},\"caxis\":{\"gridcolor\":\"white\",\"linecolor\":\"white\",\"ticks\":\"\"}},\"coloraxis\":{\"colorbar\":{\"outlinewidth\":0,\"ticks\":\"\"}},\"colorscale\":{\"sequential\":[[0.0,\"#0d0887\"],[0.1111111111111111,\"#46039f\"],[0.2222222222222222,\"#7201a8\"],[0.3333333333333333,\"#9c179e\"],[0.4444444444444444,\"#bd3786\"],[0.5555555555555556,\"#d8576b\"],[0.6666666666666666,\"#ed7953\"],[0.7777777777777778,\"#fb9f3a\"],[0.8888888888888888,\"#fdca26\"],[1.0,\"#f0f921\"]],\"sequentialminus\":[[0.0,\"#0d0887\"],[0.1111111111111111,\"#46039f\"],[0.2222222222222222,\"#7201a8\"],[0.3333333333333333,\"#9c179e\"],[0.4444444444444444,\"#bd3786\"],[0.5555555555555556,\"#d8576b\"],[0.6666666666666666,\"#ed7953\"],[0.7777777777777778,\"#fb9f3a\"],[0.8888888888888888,\"#fdca26\"],[1.0,\"#f0f921\"]],\"diverging\":[[0,\"#8e0152\"],[0.1,\"#c51b7d\"],[0.2,\"#de77ae\"],[0.3,\"#f1b6da\"],[0.4,\"#fde0ef\"],[0.5,\"#f7f7f7\"],[0.6,\"#e6f5d0\"],[0.7,\"#b8e186\"],[0.8,\"#7fbc41\"],[0.9,\"#4d9221\"],[1,\"#276419\"]]},\"xaxis\":{\"gridcolor\":\"white\",\"linecolor\":\"white\",\"ticks\":\"\",\"title\":{\"standoff\":15},\"zerolinecolor\":\"white\",\"automargin\":true,\"zerolinewidth\":2},\"yaxis\":{\"gridcolor\":\"white\",\"linecolor\":\"white\",\"ticks\":\"\",\"title\":{\"standoff\":15},\"zerolinecolor\":\"white\",\"automargin\":true,\"zerolinewidth\":2},\"scene\":{\"xaxis\":{\"backgroundcolor\":\"#E5ECF6\",\"gridcolor\":\"white\",\"linecolor\":\"white\",\"showbackground\":true,\"ticks\":\"\",\"zerolinecolor\":\"white\",\"gridwidth\":2},\"yaxis\":{\"backgroundcolor\":\"#E5ECF6\",\"gridcolor\":\"white\",\"linecolor\":\"white\",\"showbackground\":true,\"ticks\":\"\",\"zerolinecolor\":\"white\",\"gridwidth\":2},\"zaxis\":{\"backgroundcolor\":\"#E5ECF6\",\"gridcolor\":\"white\",\"linecolor\":\"white\",\"showbackground\":true,\"ticks\":\"\",\"zerolinecolor\":\"white\",\"gridwidth\":2}},\"shapedefaults\":{\"line\":{\"color\":\"#2a3f5f\"}},\"annotationdefaults\":{\"arrowcolor\":\"#2a3f5f\",\"arrowhead\":0,\"arrowwidth\":1},\"geo\":{\"bgcolor\":\"white\",\"landcolor\":\"#E5ECF6\",\"subunitcolor\":\"white\",\"showland\":true,\"showlakes\":true,\"lakecolor\":\"white\"},\"title\":{\"x\":0.05},\"mapbox\":{\"style\":\"light\"}}},\"margin\":{\"t\":40,\"b\":20},\"title\":{\"text\":\"Pipeline Cleanup \\u2014 Candidatos a Descarte\"},\"yaxis\":{\"title\":{\"text\":\"N\\u00ba de deals\"}}}}"};
+Plotly.newPlot('hist',    JSON.parse(charts.hist).data,    JSON.parse(charts.hist).layout,    {responsive:true});
+Plotly.newPlot('factors', JSON.parse(charts.factors).data, JSON.parse(charts.factors).layout, {responsive:true});
+Plotly.newPlot('cleanup', JSON.parse(charts.cleanup).data, JSON.parse(charts.cleanup).layout, {responsive:true});
+</script>
+</body>
+</html>
