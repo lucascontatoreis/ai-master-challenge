@@ -126,20 +126,29 @@ def generate_pipeline(
     products = products_df["product"].tolist()
     agents = teams_df["sales_agent"].tolist()
 
-    # Agentes com alta/baixa performance (determinístico pelo seed)
-    high_perf_agents = set(random.sample(agents, k=max(1, len(agents) // 4)))
-    low_perf_agents = set(random.sample(
-        [a for a in agents if a not in high_perf_agents],
-        k=max(1, len(agents) // 5),
-    ))
+    # Win rate individual por agente — distribui de 20% a 80% de forma realista.
+    # No dataset Kaggle real, a dispersão entre agentes é alta (~30pt de desvio).
+    # Sem isso, o fator "agente" no scoring tem variância quase nula.
+    agent_win_rates: dict[str, float] = {}
+    for idx_a, a in enumerate(agents):
+        # Distribui win rates entre 0.20 e 0.80 com concentração em torno de 0.47
+        base = 0.20 + (idx_a / max(len(agents) - 1, 1)) * 0.60
+        agent_win_rates[a] = round(base + random.uniform(-0.05, 0.05), 3)
 
-    stages = [s for s, _ in STAGES_WITH_WEIGHTS]
+    high_perf_agents = {a for a, r in agent_win_rates.items() if r >= 0.60}
+    low_perf_agents  = {a for a, r in agent_win_rates.items() if r <= 0.32}
+
+    stages  = [s for s, _ in STAGES_WITH_WEIGHTS]
     weights = [w for _, w in STAGES_WITH_WEIGHTS]
 
     rows = []
     for i in range(1, n + 1):
         agent = random.choice(agents)
         stage = random.choices(stages, weights=weights, k=1)[0]
+
+        # Para Won/Lost, respeita a win rate individual do agente
+        if stage in ("Won", "Lost"):
+            stage = "Won" if random.random() < agent_win_rates.get(agent, 0.47) else "Lost"
 
         engage_date = _random_date(start, today - timedelta(days=1))
         if stage in ("Won", "Lost"):

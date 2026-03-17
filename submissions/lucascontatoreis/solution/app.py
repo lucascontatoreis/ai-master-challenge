@@ -9,14 +9,14 @@ Rode com:
 from __future__ import annotations
 
 import io
-from pathlib import Path
+from collections import Counter
 
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
-from scorer import LeadScorer
+from scorer import LeadScorer, score_to_win_prob
 from sample_data import generate_all
 
 # ---------------------------------------------------------------------------
@@ -30,8 +30,40 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-SCORE_HOT = 70
-SCORE_WARM = 50
+# ---------------------------------------------------------------------------
+# Helpers de threshold percentual
+# ---------------------------------------------------------------------------
+
+def compute_thresholds(scores: pd.Series) -> tuple[float, float]:
+    """
+    Retorna (hot_threshold, warm_threshold) baseado na distribuição real.
+    Hot  = top 15% do pipeline  (P85)
+    Warm = P60 – P85
+    Cold = abaixo de P60
+
+    Isso garante que sempre ~15% dos deals sejam "quentes",
+    independente da escala absoluta dos scores.
+    """
+    if scores.empty:
+        return 70.0, 50.0
+    return float(scores.quantile(0.85)), float(scores.quantile(0.60))
+
+
+def tier_label(score: float, hot: float, warm: float) -> str:
+    if score >= hot:
+        return "🔴 QUENTE"
+    if score >= warm:
+        return "🟠 MORNO"
+    return "🔵 FRIO"
+
+
+def tier_color(score: float, hot: float, warm: float) -> str:
+    if score >= hot:
+        return "#e74c3c"
+    if score >= warm:
+        return "#e67e22"
+    return "#3498db"
+
 
 # ---------------------------------------------------------------------------
 # Carregamento e scoring
@@ -47,7 +79,7 @@ def load_and_score(
     if all(b is None for b in [pipeline_bytes, accounts_bytes, products_bytes, teams_bytes]):
         pipeline, accounts, products, teams = generate_all()
     else:
-        def read(b: bytes | None, fallback_fn):
+        def read(b, fallback_fn):
             return pd.read_csv(io.BytesIO(b)) if b else fallback_fn()
 
         from sample_data import (
@@ -56,7 +88,7 @@ def load_and_score(
         )
         accounts = read(accounts_bytes, generate_accounts)
         products = read(products_bytes, generate_products)
-        teams = read(teams_bytes, generate_sales_teams)
+        teams    = read(teams_bytes, generate_sales_teams)
         pipeline = read(pipeline_bytes, lambda: generate_pipeline(accounts, products, teams))
 
     scorer = LeadScorer(pipeline, accounts, products, teams)
@@ -80,7 +112,7 @@ with st.sidebar:
         pipeline_file = st.file_uploader("sales_pipeline.csv", type="csv")
         accounts_file = st.file_uploader("accounts.csv", type="csv")
         products_file = st.file_uploader("products.csv", type="csv")
-        teams_file = st.file_uploader("sales_teams.csv", type="csv")
+        teams_file    = st.file_uploader("sales_teams.csv", type="csv")
 
     st.divider()
     st.subheader("🔍 Filtros")
@@ -104,27 +136,28 @@ if scored_df.empty:
 # ---------------------------------------------------------------------------
 
 with st.sidebar:
-    agents = sorted(scored_df["sales_agent"].dropna().unique()) if "sales_agent" in scored_df.columns else []
-    managers = sorted(scored_df["manager"].dropna().unique()) if "manager" in scored_df.columns else []
-    regions = sorted(scored_df["regional_office"].dropna().unique()) if "regional_office" in scored_df.columns else []
-    stages = sorted(scored_df["deal_stage"].dropna().unique()) if "deal_stage" in scored_df.columns else []
-    products_list = sorted(scored_df["product"].dropna().unique()) if "product" in scored_df.columns else []
+    agents   = sorted(scored_df["sales_agent"].dropna().unique())    if "sales_agent"      in scored_df.columns else []
+    managers = sorted(scored_df["manager"].dropna().unique())        if "manager"          in scored_df.columns else []
+    regions  = sorted(scored_df["regional_office"].dropna().unique()) if "regional_office" in scored_df.columns else []
+    stages   = sorted(scored_df["deal_stage"].dropna().unique())     if "deal_stage"       in scored_df.columns else []
+    prods    = sorted(scored_df["product"].dropna().unique())        if "product"          in scored_df.columns else []
 
-    selected_manager = st.multiselect("Manager", managers, placeholder="Todos os managers")
-    selected_agent = st.multiselect("Vendedor", agents, placeholder="Todos os vendedores")
-    selected_region = st.multiselect("Região", regions, placeholder="Todas as regiões")
-    selected_stage = st.multiselect(
-        "Stage", stages, placeholder="Todos os stages",
+    selected_manager = st.multiselect("Manager",  managers, placeholder="Todos")
+    selected_agent   = st.multiselect("Vendedor", agents,   placeholder="Todos")
+    selected_region  = st.multiselect("Região",   regions,  placeholder="Todas")
+    selected_stage   = st.multiselect(
+        "Stage", stages, placeholder="Todos",
         default=["Engaging", "Prospecting"] if "Engaging" in stages else [],
     )
-    selected_product = st.multiselect("Produto", products_list, placeholder="Todos os produtos")
-    min_score = st.slider("Score mínimo", 0, 100, 0)
-    only_flagged = st.checkbox("Apenas deals com alertas ⚠️")
+    selected_product = st.multiselect("Produto", prods, placeholder="Todos")
+    min_score        = st.slider("Score mínimo", 0, 100, 0)
+    only_flagged     = st.checkbox("Apenas deals com alertas ⚠️")
 
     st.divider()
     st.caption(
         "Scoring: stage 25pt · potencial 20pt\n"
-        "velocidade+urgência 20pt · conta 20pt · agente 15pt"
+        "velocidade 20pt · conta 20pt · agente 15pt\n\n"
+        "Thresholds: percentil 85 (quente) / 60 (morno)"
     )
 
 # ---------------------------------------------------------------------------
@@ -132,19 +165,17 @@ with st.sidebar:
 # ---------------------------------------------------------------------------
 
 filtered = scored_df.copy()
-if selected_manager and "manager" in filtered.columns:
-    filtered = filtered[filtered["manager"].isin(selected_manager)]
-if selected_agent and "sales_agent" in filtered.columns:
-    filtered = filtered[filtered["sales_agent"].isin(selected_agent)]
-if selected_region and "regional_office" in filtered.columns:
-    filtered = filtered[filtered["regional_office"].isin(selected_region)]
-if selected_stage and "deal_stage" in filtered.columns:
-    filtered = filtered[filtered["deal_stage"].isin(selected_stage)]
-if selected_product and "product" in filtered.columns:
-    filtered = filtered[filtered["product"].isin(selected_product)]
+if selected_manager and "manager"          in filtered.columns: filtered = filtered[filtered["manager"].isin(selected_manager)]
+if selected_agent   and "sales_agent"      in filtered.columns: filtered = filtered[filtered["sales_agent"].isin(selected_agent)]
+if selected_region  and "regional_office"  in filtered.columns: filtered = filtered[filtered["regional_office"].isin(selected_region)]
+if selected_stage   and "deal_stage"       in filtered.columns: filtered = filtered[filtered["deal_stage"].isin(selected_stage)]
+if selected_product and "product"          in filtered.columns: filtered = filtered[filtered["product"].isin(selected_product)]
 filtered = filtered[filtered["total_score"] >= min_score]
 if only_flagged and "risk_flags" in filtered.columns:
     filtered = filtered[filtered["risk_flags"].str.len() > 0]
+
+# Thresholds baseados na distribuição filtrada
+HOT_THR, WARM_THR = compute_thresholds(filtered["total_score"])
 
 # ---------------------------------------------------------------------------
 # Header + KPIs
@@ -153,25 +184,23 @@ if only_flagged and "risk_flags" in filtered.columns:
 st.title("🎯 Lead Scorer — Pipeline Priorizado")
 
 col1, col2, col3, col4, col5 = st.columns(5)
-hot_count = (filtered["total_score"] >= SCORE_HOT).sum()
-warm_count = ((filtered["total_score"] >= SCORE_WARM) & (filtered["total_score"] < SCORE_HOT)).sum()
-cold_count = (filtered["total_score"] < SCORE_WARM).sum()
+hot_count    = (filtered["total_score"] >= HOT_THR).sum()
+warm_count   = ((filtered["total_score"] >= WARM_THR) & (filtered["total_score"] < HOT_THR)).sum()
+cold_count   = (filtered["total_score"] < WARM_THR).sum()
 flagged_count = (filtered["risk_flags"].str.len() > 0).sum() if "risk_flags" in filtered.columns else 0
 
 with col1:
-    st.metric("🔴 Quentes (≥70)", hot_count)
+    st.metric(f"🔴 Quentes (≥P85 = {HOT_THR:.0f})", hot_count)
 with col2:
-    st.metric("🟠 Mornos (50–69)", warm_count)
+    st.metric(f"🟠 Mornos (P60–P85)", warm_count)
 with col3:
-    st.metric("🔵 Frios (<50)", cold_count)
+    st.metric(f"🔵 Frios (<P60 = {WARM_THR:.0f})", cold_count)
 with col4:
     st.metric("⚠️ Com Alertas", flagged_count)
 with col5:
     if "close_value" in filtered.columns:
-        hot_warm_value = filtered[filtered["total_score"] >= SCORE_WARM]["close_value"].sum()
-        st.metric("💰 Valor em Jogo", f"R$ {hot_warm_value:,.0f}")
-    else:
-        st.metric("Total", len(filtered))
+        hot_value = filtered[filtered["total_score"] >= HOT_THR]["close_value"].sum()
+        st.metric("💰 Valor em Quentes", f"R$ {hot_value:,.0f}")
 
 st.divider()
 
@@ -179,10 +208,11 @@ st.divider()
 # Tabs
 # ---------------------------------------------------------------------------
 
-tab_pipeline, tab_focus, tab_manager, tab_charts, tab_detail = st.tabs([
-    "📋 Pipeline Completo",
+tab_pipeline, tab_focus, tab_cleanup, tab_manager, tab_charts, tab_detail = st.tabs([
+    "📋 Pipeline",
     "⚡ Meu Foco (Top 10)",
-    "👔 Visão do Manager",
+    "🗑️ Pipeline Cleanup",
+    "👔 Manager",
     "📊 Análises",
     "🔎 Detalhe do Deal",
 ])
@@ -192,12 +222,12 @@ tab_pipeline, tab_focus, tab_manager, tab_charts, tab_detail = st.tabs([
 # ===========================================================================
 
 with tab_pipeline:
-    st.subheader(f"Pipeline Priorizado — {len(filtered):,} deals ativos")
-    st.caption("Ordenado por score. Vermelho = foco imediato.")
+    st.subheader(f"Pipeline Priorizado — {len(filtered):,} deals")
+    st.caption(f"Thresholds automáticos: 🔴 ≥{HOT_THR:.0f} · 🟠 {WARM_THR:.0f}–{HOT_THR:.0f} · 🔵 <{WARM_THR:.0f}")
 
     DISPLAY_COLS = [
         "opportunity_id", "sales_agent", "account", "product", "deal_stage",
-        "close_value", "total_score",
+        "close_value", "total_score", "win_probability",
         "score_stage", "score_potential", "score_velocity", "score_account", "score_agent",
         "risk_flags", "explanations",
     ]
@@ -209,10 +239,10 @@ with tab_pipeline:
     RENAME = {
         "opportunity_id": "Deal ID", "sales_agent": "Vendedor", "account": "Conta",
         "product": "Produto", "deal_stage": "Stage", "close_value": "Valor (R$)",
-        "total_score": "Score", "score_stage": "Pts Stage",
-        "score_potential": "Pts Potencial", "score_velocity": "Pts Velocidade",
-        "score_account": "Pts Conta", "score_agent": "Pts Agente",
-        "risk_flags": "Alertas", "explanations": "Explicação",
+        "total_score": "Score", "win_probability": "P(win)",
+        "score_stage": "Pts Stage", "score_potential": "Pts Potencial",
+        "score_velocity": "Pts Velocidade", "score_account": "Pts Conta",
+        "score_agent": "Pts Agente", "risk_flags": "Alertas", "explanations": "Explicação",
     }
     display_df = display_df.rename(columns=RENAME)
 
@@ -220,86 +250,75 @@ with tab_pipeline:
         display_df["Valor (R$)"] = display_df["Valor (R$)"].apply(
             lambda x: f"R$ {x:,.0f}" if pd.notna(x) and float(x) > 0 else "—"
         )
+    if "P(win)" in display_df.columns:
+        display_df["P(win)"] = display_df["P(win)"].apply(
+            lambda x: f"{float(x)*100:.0f}%" if pd.notna(x) else "—"
+        )
 
     def _hl_score(val):
         try:
             v = float(val)
         except (ValueError, TypeError):
             return ""
-        if v >= SCORE_HOT:
+        if v >= HOT_THR:
             return "background-color:#fde8e8;color:#c0392b;font-weight:700"
-        elif v >= SCORE_WARM:
+        if v >= WARM_THR:
             return "background-color:#fef3e2;color:#d35400;font-weight:600"
         return "background-color:#ebf5fb;color:#2980b9"
 
-    fmt_cols = {k: "{:.1f}" for k in ["Score", "Pts Stage", "Pts Potencial",
-                                        "Pts Velocidade", "Pts Conta", "Pts Agente"]
-                if k in display_df.columns}
+    num_fmt = {k: "{:.1f}" for k in ["Score", "Pts Stage", "Pts Potencial",
+                                       "Pts Velocidade", "Pts Conta", "Pts Agente"]
+               if k in display_df.columns}
 
-    styled = (
-        display_df.style
-        .applymap(_hl_score, subset=["Score"])
-        .format(fmt_cols, na_rep="—")
+    st.dataframe(
+        display_df.style.applymap(_hl_score, subset=["Score"]).format(num_fmt, na_rep="—"),
+        use_container_width=True, height=520,
     )
-    st.dataframe(styled, use_container_width=True, height=520)
 
     csv_out = filtered[avail].to_csv(index=False).encode("utf-8")
     st.download_button("⬇️ Exportar CSV", data=csv_out,
                        file_name="pipeline_priorizado.csv", mime="text/csv")
 
 # ===========================================================================
-# TAB 2 — Meu Foco (Top 10)
+# TAB 2 — Meu Foco
 # ===========================================================================
 
 with tab_focus:
     st.subheader("⚡ Meu Foco — Segunda-feira de Manhã")
-    st.markdown(
-        "Selecione seu nome para ver sua lista de prioridades. "
-        "**Foque nestas 10 oportunidades esta semana.**"
-    )
+    st.markdown("Selecione seu nome. **Foque nestas 10 oportunidades esta semana.**")
 
     if agents:
-        selected_my_agent = st.selectbox("Sou o vendedor:", ["— selecione —"] + list(agents))
+        my_agent = st.selectbox("Sou o vendedor:", ["— selecione —"] + list(agents))
 
-        if selected_my_agent != "— selecione —" and "sales_agent" in filtered.columns:
+        if my_agent != "— selecione —" and "sales_agent" in filtered.columns:
             my_deals = (
-                filtered[filtered["sales_agent"] == selected_my_agent]
+                filtered[filtered["sales_agent"] == my_agent]
                 .sort_values("total_score", ascending=False)
                 .head(10)
                 .reset_index(drop=True)
             )
             my_deals.index += 1
-            my_deals.index.name = "Prioridade"
 
             if my_deals.empty:
                 st.info("Nenhum deal ativo para este vendedor com os filtros atuais.")
             else:
                 for i, (_, row) in enumerate(my_deals.iterrows(), 1):
-                    score = float(row["total_score"])
-                    if score >= SCORE_HOT:
-                        color = "🔴"
-                        label = "QUENTE"
-                        border = "#e74c3c"
-                    elif score >= SCORE_WARM:
-                        color = "🟠"
-                        label = "MORNO"
-                        border = "#e67e22"
-                    else:
-                        color = "🔵"
-                        label = "FRIO"
-                        border = "#3498db"
+                    score    = float(row["total_score"])
+                    win_prob = float(row.get("win_probability", score_to_win_prob(score)))
+                    color    = tier_color(score, HOT_THR, WARM_THR)
+                    label    = tier_label(score, HOT_THR, WARM_THR)
+                    flags    = str(row.get("risk_flags", ""))
 
                     deal_id = row.get("opportunity_id", "—")
                     account = row.get("account", "—")
                     product = row.get("product", "—")
-                    stage = row.get("deal_stage", "—")
-                    value = row.get("close_value", 0)
-                    flags = str(row.get("risk_flags", ""))
-
+                    stage   = row.get("deal_stage", "—")
+                    value   = row.get("close_value", 0)
                     value_str = f"R$ {float(value):,.0f}" if pd.notna(value) and float(value) > 0 else "sem valor"
 
                     with st.expander(
-                        f"{color} #{i} — {deal_id} | {account} | Score {score:.0f} {label}",
+                        f"{label.split()[0]} #{i} — {deal_id} | {account} | "
+                        f"Score {score:.0f} · P(win) {win_prob*100:.0f}%",
                         expanded=(i <= 3),
                     ):
                         c1, c2 = st.columns(2)
@@ -307,151 +326,229 @@ with tab_focus:
                             st.markdown(f"**Produto:** {product}")
                             st.markdown(f"**Stage:** {stage}")
                             st.markdown(f"**Valor:** {value_str}")
+                            st.markdown(f"**Probabilidade de fechar:** **{win_prob*100:.0f}%**")
                         with c2:
-                            # Barra de score
                             fig_mini = go.Figure(go.Bar(
-                                x=[score], y=["Score"],
-                                orientation="h",
-                                marker_color=border,
+                                x=[score], y=["Score"], orientation="h",
+                                marker_color=color,
                                 text=[f"{score:.0f}/100"],
                                 textposition="outside",
                             ))
                             fig_mini.update_layout(
                                 xaxis=dict(range=[0, 100]),
                                 margin=dict(l=0, r=40, t=0, b=0),
-                                height=60,
-                                showlegend=False,
+                                height=60, showlegend=False,
                             )
                             st.plotly_chart(fig_mini, use_container_width=True)
 
-                        # Explicação
-                        explanations = str(row.get("explanations", "")).split(" | ")
                         st.markdown("**Por que este score:**")
-                        for exp in explanations:
+                        for exp in str(row.get("explanations", "")).split(" | "):
                             if exp.strip():
                                 st.markdown(f"  - {exp.strip()}")
 
                         if flags:
                             st.warning(f"**Alertas:** {flags}")
 
-                        # Ação recomendada
                         st.markdown("---")
-                        if score >= SCORE_HOT:
-                            action = "✅ **Ação:** Ligue hoje. Agende reunião de fechamento esta semana."
-                        elif score >= SCORE_WARM:
-                            vel = float(row.get("score_velocity", 0))
+                        if score >= HOT_THR:
+                            st.success("✅ **Ação:** Ligue hoje. Agende reunião de fechamento esta semana.")
+                        elif score >= WARM_THR:
+                            vel = float(row.get("score_velocity", 10))
                             if vel < 7:
-                                action = "⚠️ **Ação:** Deal esfriando — crie urgência ou requalifique."
+                                st.warning("⚠️ **Ação:** Deal esfriando — crie urgência ou requalifique.")
                             else:
-                                action = "📌 **Ação:** Um push pode fechar. Envie proposta ou case de sucesso."
+                                st.info("📌 **Ação:** Um push pode fechar. Envie proposta ou case de sucesso.")
                         else:
-                            action = "💤 **Ação:** Baixa prioridade agora. Retome em 30 dias ou coloque em nurture."
-                        st.markdown(action)
-    else:
-        st.info("Nenhum vendedor identificado nos dados.")
+                            st.info("💤 **Ação:** Baixa prioridade. Retome em 30 dias ou coloque em nurture.")
 
 # ===========================================================================
-# TAB 3 — Visão do Manager
+# TAB 3 — Pipeline Cleanup
+# ===========================================================================
+
+with tab_cleanup:
+    st.subheader("🗑️ Pipeline Cleanup — O que descartar ou arquivar")
+    st.markdown(
+        "Deals que consomem energia sem perspectiva real de fechar. "
+        "**Pergunte: vale continuar investindo tempo aqui?**"
+    )
+
+    if "risk_flags" in filtered.columns and "engage_date" in filtered.columns:
+        today = pd.Timestamp.today().normalize()
+        filt  = filtered.copy()
+
+        # Critérios de descarte (qualquer um dos abaixo)
+        filt["days_engaged"] = (
+            pd.to_datetime(filt["engage_date"], errors="coerce")
+            .apply(lambda d: (today - d).days if pd.notna(d) else 0)
+        )
+
+        cold_score   = filt["total_score"] < WARM_THR
+        stagnant     = filt["days_engaged"] > 90
+        no_value     = filt["close_value"].fillna(0) == 0 if "close_value" in filt.columns else pd.Series(False, index=filt.index)
+        overdue      = filt["risk_flags"].str.contains("📅", na=False)
+
+        # Três categorias de cleanup
+        zombie = filt[cold_score & stagnant].copy()
+        zombie["cleanup_reason"] = "🧟 Zombie — score baixo + parado >90d"
+
+        unqualified = filt[cold_score & no_value & ~stagnant].copy()
+        unqualified["cleanup_reason"] = "❓ Não qualificado — score baixo + sem valor"
+
+        overdue_df = filt[overdue & cold_score].copy()
+        overdue_df["cleanup_reason"] = "📅 Overdue — data de fechamento vencida + score baixo"
+
+        cleanup_df = (
+            pd.concat([zombie, unqualified, overdue_df])
+            .drop_duplicates(subset=["opportunity_id"])
+            .sort_values("total_score")
+        )
+
+        st.info(
+            f"**{len(cleanup_df):,} deals candidatos a descarte** "
+            f"({len(cleanup_df)/len(filtered)*100:.1f}% do pipeline filtrado). "
+            f"Recuperar o tempo gasto neles libera foco para os {hot_count} deals quentes."
+        )
+
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            st.metric("🧟 Zombies", len(zombie))
+            st.caption("Score baixo + parado >90 dias")
+        with c2:
+            st.metric("❓ Não qualificados", len(unqualified))
+            st.caption("Score baixo + sem close_value")
+        with c3:
+            st.metric("📅 Overdue", len(overdue_df))
+            st.caption("Data de fechamento vencida")
+
+        st.divider()
+
+        CLEANUP_COLS = [c for c in [
+            "cleanup_reason", "opportunity_id", "sales_agent", "account",
+            "product", "deal_stage", "close_value", "total_score",
+            "win_probability", "days_engaged", "risk_flags",
+        ] if c in cleanup_df.columns]
+
+        cleanup_show = cleanup_df[CLEANUP_COLS].copy().reset_index(drop=True)
+        cleanup_show.index += 1
+        cleanup_show.index.name = "Rank"
+
+        CLEANUP_RENAME = {
+            "cleanup_reason": "Motivo", "opportunity_id": "Deal ID",
+            "sales_agent": "Vendedor", "account": "Conta",
+            "product": "Produto", "deal_stage": "Stage",
+            "close_value": "Valor (R$)", "total_score": "Score",
+            "win_probability": "P(win)", "days_engaged": "Dias Parado",
+            "risk_flags": "Alertas",
+        }
+        cleanup_show = cleanup_show.rename(columns=CLEANUP_RENAME)
+
+        if "Valor (R$)" in cleanup_show.columns:
+            cleanup_show["Valor (R$)"] = cleanup_show["Valor (R$)"].apply(
+                lambda x: f"R$ {x:,.0f}" if pd.notna(x) and float(x) > 0 else "—"
+            )
+        if "P(win)" in cleanup_show.columns:
+            cleanup_show["P(win)"] = cleanup_show["P(win)"].apply(
+                lambda x: f"{float(x)*100:.0f}%" if pd.notna(x) else "—"
+            )
+
+        st.dataframe(
+            cleanup_show.style
+            .applymap(lambda _: "background-color:#fdf2f8", subset=["Score"])
+            .format({"Score": "{:.1f}"}, na_rep="—"),
+            use_container_width=True, height=460,
+        )
+
+        csv_cleanup = cleanup_df[CLEANUP_COLS].to_csv(index=False).encode("utf-8")
+        st.download_button(
+            "⬇️ Exportar lista de descarte",
+            data=csv_cleanup,
+            file_name="pipeline_cleanup.csv",
+            mime="text/csv",
+        )
+
+        st.markdown(
+            "**Como usar esta lista:**\n"
+            "1. Converse com o vendedor sobre cada deal\n"
+            "2. Se não há resposta há >3 semanas → mover para Lost\n"
+            "3. Se sem valor após 60d → requalificar ou perder\n"
+            "4. Pipeline limpo = forecast mais preciso"
+        )
+    else:
+        st.info("Dados insuficientes para análise de cleanup.")
+
+# ===========================================================================
+# TAB 4 — Manager
 # ===========================================================================
 
 with tab_manager:
     st.subheader("👔 Saúde do Pipeline por Manager / Região")
 
-    if "manager" in filtered.columns and "regional_office" in filtered.columns:
+    if "manager" in filtered.columns:
         col_a, col_b = st.columns(2)
 
         with col_a:
-            # Heatmap: manager × stage → score médio
-            if not filtered.empty:
-                heatmap_data = (
-                    filtered.groupby(["manager", "deal_stage"])["total_score"]
-                    .mean()
-                    .reset_index()
-                    .pivot(index="manager", columns="deal_stage", values="total_score")
-                    .fillna(0)
-                )
-                fig_heat = px.imshow(
-                    heatmap_data,
-                    color_continuous_scale="RdYlGn",
-                    title="Score médio por Manager × Stage",
-                    labels={"color": "Score Médio"},
-                    aspect="auto",
-                )
-                st.plotly_chart(fig_heat, use_container_width=True)
+            heatmap_data = (
+                filtered.groupby(["manager", "deal_stage"])["total_score"]
+                .mean().reset_index()
+                .pivot(index="manager", columns="deal_stage", values="total_score")
+                .fillna(0)
+            )
+            fig_heat = px.imshow(
+                heatmap_data, color_continuous_scale="RdYlGn",
+                title="Score médio por Manager × Stage",
+                labels={"color": "Score Médio"}, aspect="auto",
+            )
+            st.plotly_chart(fig_heat, use_container_width=True)
 
         with col_b:
-            # Pipeline value por manager
             manager_summary = (
-                filtered.groupby("manager")
-                .agg(
+                filtered.groupby("manager").agg(
                     deals=("total_score", "count"),
                     score_medio=("total_score", "mean"),
-                    quentes=("total_score", lambda x: (x >= SCORE_HOT).sum()),
+                    quentes=("total_score", lambda x: (x >= HOT_THR).sum()),
+                    prob_media=("win_probability", "mean") if "win_probability" in filtered.columns else ("total_score", "count"),
                     valor_total=("close_value", "sum"),
-                )
-                .sort_values("score_medio", ascending=False)
-                .reset_index()
+                ).sort_values("score_medio", ascending=False).reset_index()
             )
-            manager_summary["valor_total"] = manager_summary["valor_total"].apply(
-                lambda x: f"R$ {x:,.0f}"
-            )
-            manager_summary.columns = [
-                "Manager", "Deals Ativos", "Score Médio", "Quentes (≥70)", "Valor Total"
-            ]
-
-            def _hl_manager(val):
-                try:
-                    v = float(val)
-                except (ValueError, TypeError):
-                    return ""
-                if v >= 60:
-                    return "background-color:#d5f5e3"
-                elif v >= 45:
-                    return "background-color:#fef9e7"
-                return "background-color:#fdf2f8"
+            manager_summary["valor_total"]  = manager_summary["valor_total"].apply(lambda x: f"R$ {x:,.0f}")
+            manager_summary["prob_media"]   = manager_summary["prob_media"].apply(lambda x: f"{x*100:.0f}%" if x <= 1 else f"{x:.0f}")
+            manager_summary.columns = ["Manager", "Deals Ativos", "Score Médio", "Quentes", "P(win) Média", "Valor Total"]
 
             st.dataframe(
                 manager_summary.style
-                .applymap(_hl_manager, subset=["Score Médio"])
-                .format({"Score Médio": "{:.1f}"}),
-                use_container_width=True,
-                height=300,
+                .applymap(
+                    lambda v: "background-color:#d5f5e3" if isinstance(v, float) and v >= 60
+                    else "background-color:#fef9e7" if isinstance(v, float) and v >= 45
+                    else "",
+                    subset=["Score Médio"],
+                ).format({"Score Médio": "{:.1f}"}, na_rep="—"),
+                use_container_width=True, height=300,
             )
 
-        # Scatter: score médio × total de deals por agente
         if "sales_agent" in filtered.columns:
             agent_summary = (
-                filtered.groupby(["sales_agent", "manager"])
-                .agg(
+                filtered.groupby(["sales_agent", "manager"]).agg(
                     deals=("total_score", "count"),
                     score_medio=("total_score", "mean"),
-                    quentes=("total_score", lambda x: (x >= SCORE_HOT).sum()),
-                )
-                .reset_index()
+                    quentes=("total_score", lambda x: (x >= HOT_THR).sum()),
+                ).reset_index()
             )
             fig_bubble = px.scatter(
-                agent_summary,
-                x="score_medio",
-                y="deals",
-                size="quentes",
-                color="manager",
+                agent_summary, x="score_medio", y="deals",
+                size="quentes", color="manager",
                 hover_name="sales_agent",
-                labels={
-                    "score_medio": "Score Médio do Pipeline",
-                    "deals": "Deals Ativos",
-                    "quentes": "Deals Quentes",
-                },
-                title="Vendedores: volume × qualidade de pipeline (tamanho = deals quentes)",
+                labels={"score_medio": "Score Médio", "deals": "Deals Ativos", "quentes": "Deals Quentes"},
+                title="Vendedores: volume × qualidade (tamanho = deals quentes)",
                 size_max=40,
             )
-            fig_bubble.add_vline(x=60, line_dash="dot", line_color="gray",
-                                  annotation_text="Score 60")
+            fig_bubble.add_vline(x=filtered["total_score"].median(), line_dash="dot",
+                                  line_color="gray", annotation_text="Mediana")
             st.plotly_chart(fig_bubble, use_container_width=True)
     else:
-        st.info("Dados de manager/região não disponíveis.")
+        st.info("Dados de manager não disponíveis.")
 
 # ===========================================================================
-# TAB 4 — Análises
+# TAB 5 — Análises
 # ===========================================================================
 
 with tab_charts:
@@ -459,134 +556,109 @@ with tab_charts:
 
     with col_a:
         fig_hist = px.histogram(
-            filtered, x="total_score", nbins=20,
+            filtered, x="total_score", nbins=25,
             color_discrete_sequence=["#3498db"],
             labels={"total_score": "Score"},
             title="Distribuição de Scores",
         )
-        fig_hist.add_vline(x=SCORE_HOT, line_dash="dash", line_color="#e74c3c",
-                           annotation_text="Quente (70)")
-        fig_hist.add_vline(x=SCORE_WARM, line_dash="dash", line_color="#e67e22",
-                           annotation_text="Morno (50)")
+        fig_hist.add_vline(x=HOT_THR,  line_dash="dash", line_color="#e74c3c", annotation_text=f"Quente ({HOT_THR:.0f})")
+        fig_hist.add_vline(x=WARM_THR, line_dash="dash", line_color="#e67e22", annotation_text=f"Morno ({WARM_THR:.0f})")
         st.plotly_chart(fig_hist, use_container_width=True)
 
     with col_b:
-        score_cols = ["score_stage", "score_potential", "score_velocity", "score_account", "score_agent"]
-        avail_scores = [c for c in score_cols if c in filtered.columns]
-        if avail_scores:
-            means = filtered[avail_scores].mean()
-            max_pts = {"score_stage": 25, "score_potential": 20, "score_velocity": 20,
-                       "score_account": 20, "score_agent": 15}
-            labels = {"score_stage": "Stage", "score_potential": "Potencial",
-                      "score_velocity": "Velocidade", "score_account": "Conta",
-                      "score_agent": "Agente"}
-            pct_used = [means[c] / max_pts[c] * 100 for c in avail_scores]
-            fig_factors = px.bar(
-                x=[labels[c] for c in avail_scores],
-                y=pct_used,
-                color=pct_used,
-                color_continuous_scale="RdYlGn",
-                range_y=[0, 100],
-                labels={"x": "Fator", "y": "% do máximo atingido"},
-                title="Aproveitamento médio por fator (100% = todos no máximo)",
+        # Win probability vs score scatter
+        if "win_probability" in filtered.columns:
+            sample = filtered.sample(min(500, len(filtered)), random_state=42)
+            fig_wp = px.scatter(
+                sample, x="total_score", y=sample["win_probability"] * 100,
+                color="deal_stage" if "deal_stage" in sample.columns else None,
+                labels={"total_score": "Score", "y": "P(win) %"},
+                title="Score → Probabilidade de Fechar",
+                opacity=0.5,
             )
-            st.plotly_chart(fig_factors, use_container_width=True)
+            fig_wp.add_hline(y=50, line_dash="dot", line_color="gray", annotation_text="50%")
+            st.plotly_chart(fig_wp, use_container_width=True)
 
     col_c, col_d = st.columns(2)
 
     with col_c:
-        if "product" in filtered.columns and "series" in filtered.columns:
-            prod_scores = (
-                filtered.groupby(["product", "series"])["total_score"]
-                .mean()
-                .sort_values()
-                .reset_index()
-            )
-            fig_prod = px.bar(
-                prod_scores, x="total_score", y="product", color="series",
-                orientation="h",
-                labels={"product": "Produto", "total_score": "Score Médio", "series": "Série"},
-                title="Score médio por Produto e Série",
-            )
-            st.plotly_chart(fig_prod, use_container_width=True)
-        elif "product" in filtered.columns:
-            prod_scores = (
-                filtered.groupby("product")["total_score"]
-                .mean().sort_values().reset_index()
-            )
-            fig_prod = px.bar(
-                prod_scores, x="total_score", y="product", orientation="h",
-                color="total_score", color_continuous_scale="Blues",
-                labels={"product": "Produto", "total_score": "Score Médio"},
-                title="Score médio por Produto",
-            )
-            st.plotly_chart(fig_prod, use_container_width=True)
+        score_cols = ["score_stage", "score_potential", "score_velocity", "score_account", "score_agent"]
+        max_pts    = {"score_stage": 25, "score_potential": 20, "score_velocity": 20, "score_account": 20, "score_agent": 15}
+        labels_map = {"score_stage": "Stage", "score_potential": "Potencial",
+                      "score_velocity": "Velocidade", "score_account": "Conta", "score_agent": "Agente"}
+        avail_sc   = [c for c in score_cols if c in filtered.columns]
+        means      = filtered[avail_sc].mean()
+        pct_used   = [means[c] / max_pts[c] * 100 for c in avail_sc]
+
+        fig_factors = px.bar(
+            x=[labels_map[c] for c in avail_sc], y=pct_used,
+            color=pct_used, color_continuous_scale="RdYlGn",
+            range_y=[0, 100],
+            labels={"x": "Fator", "y": "% do máximo"},
+            title="Aproveitamento médio por fator",
+        )
+        st.plotly_chart(fig_factors, use_container_width=True)
 
     with col_d:
         if "risk_flags" in filtered.columns:
-            # Frequência de cada tipo de alerta
             all_flags = []
-            for flags_str in filtered["risk_flags"].dropna():
-                if flags_str:
-                    all_flags.extend([f.strip() for f in flags_str.split("|") if f.strip()])
-
+            for fs in filtered["risk_flags"].dropna():
+                if fs:
+                    all_flags.extend([f.strip() for f in fs.split("|") if f.strip()])
             if all_flags:
-                from collections import Counter
-                flag_counts = Counter(all_flags)
-                flag_df = pd.DataFrame(flag_counts.most_common(8), columns=["Alerta", "Qtd"])
+                fc = Counter(all_flags)
+                flag_df = pd.DataFrame(fc.most_common(8), columns=["Alerta", "Qtd"])
                 fig_flags = px.bar(
                     flag_df, x="Qtd", y="Alerta", orientation="h",
                     color="Qtd", color_continuous_scale="Reds",
-                    title="Alertas mais frequentes no pipeline",
+                    title="Alertas mais frequentes",
                 )
                 st.plotly_chart(fig_flags, use_container_width=True)
-            else:
-                st.info("Nenhum alerta identificado nos deals filtrados.")
 
-    # Scatter valor × score
     if "close_value" in filtered.columns:
         scatter_df = filtered[filtered["close_value"] > 0].copy()
         if not scatter_df.empty:
-            hover = [c for c in ["sales_agent", "account", "deal_stage", "product", "risk_flags"]
+            hover = [c for c in ["sales_agent", "account", "deal_stage", "product", "win_probability"]
                      if c in scatter_df.columns]
-            fig_scatter = px.scatter(
+            fig_quad = px.scatter(
                 scatter_df, x="total_score", y="close_value",
                 color="deal_stage" if "deal_stage" in scatter_df.columns else None,
-                hover_data=hover,
+                hover_data=hover, opacity=0.65,
                 labels={"total_score": "Score", "close_value": "Valor (R$)"},
-                title="Quadrante de Prioridade: alto score + alto valor = foco máximo",
-                opacity=0.65,
+                title="Quadrante: alto score + alto valor = foco máximo",
             )
-            fig_scatter.add_vline(x=60, line_dash="dot", line_color="gray")
-            st.plotly_chart(fig_scatter, use_container_width=True)
+            fig_quad.add_vline(x=filtered["total_score"].median(), line_dash="dot", line_color="gray")
+            st.plotly_chart(fig_quad, use_container_width=True)
 
 # ===========================================================================
-# TAB 5 — Detalhe do Deal
+# TAB 6 — Detalhe do Deal
 # ===========================================================================
 
 with tab_detail:
     st.subheader("🔎 Análise Detalhada de um Deal")
 
     if "opportunity_id" in filtered.columns:
-        deal_ids = filtered["opportunity_id"].tolist()
-        selected_id = st.selectbox("Selecione o Deal ID", deal_ids)
+        selected_id = st.selectbox("Selecione o Deal ID", filtered["opportunity_id"].tolist())
 
         if selected_id:
-            row = filtered[filtered["opportunity_id"] == selected_id].iloc[0]
-            score_val = float(row["total_score"])
-            flags = str(row.get("risk_flags", ""))
+            row      = filtered[filtered["opportunity_id"] == selected_id].iloc[0]
+            score    = float(row["total_score"])
+            win_prob = float(row.get("win_probability", score_to_win_prob(score)))
+            flags    = str(row.get("risk_flags", ""))
+            label    = tier_label(score, HOT_THR, WARM_THR)
+            color    = tier_color(score, HOT_THR, WARM_THR)
 
-            # Header com score e status
             col_score, col_info, col_breakdown = st.columns([1, 1, 2])
 
             with col_score:
-                st.metric("Score Total", f"{score_val:.1f} / 100")
-                if score_val >= SCORE_HOT:
-                    st.success("🔴 QUENTE — priorize agora!")
-                elif score_val >= SCORE_WARM:
-                    st.warning("🟠 MORNO — fique de olho")
+                st.metric("Score Total",         f"{score:.1f} / 100")
+                st.metric("P(win) estimada",     f"{win_prob*100:.0f}%")
+                if score >= HOT_THR:
+                    st.success(f"{label} — priorize agora!")
+                elif score >= WARM_THR:
+                    st.warning(f"{label} — fique de olho")
                 else:
-                    st.info("🔵 FRIO — foco em outros primeiro")
+                    st.info(f"{label} — foco em outros primeiro")
 
                 if flags:
                     st.markdown("**Alertas:**")
@@ -596,7 +668,7 @@ with tab_detail:
 
             with col_info:
                 st.markdown("**Dados do Deal**")
-                for label, key in [
+                for lbl, key in [
                     ("Stage", "deal_stage"), ("Vendedor", "sales_agent"),
                     ("Conta", "account"), ("Produto", "product"),
                     ("Série", "series"), ("Manager", "manager"),
@@ -604,7 +676,7 @@ with tab_detail:
                 ]:
                     val = row.get(key, "—")
                     if pd.notna(val) and str(val).strip():
-                        st.markdown(f"**{label}:** {val}")
+                        st.markdown(f"**{lbl}:** {val}")
 
                 cv = row.get("close_value", 0)
                 cv_str = f"R$ {float(cv):,.0f}" if pd.notna(cv) and float(cv) > 0 else "Não confirmado"
@@ -617,13 +689,10 @@ with tab_detail:
             with col_breakdown:
                 st.markdown("**Detalhamento do Score**")
                 factor_data = {
-                    "Fator": ["Stage", "Potencial", "Velocidade", "Conta", "Agente"],
-                    "Pontos": [
-                        row.get("score_stage", 0), row.get("score_potential", 0),
-                        row.get("score_velocity", 0), row.get("score_account", 0),
-                        row.get("score_agent", 0),
-                    ],
-                    "Máximo": [25, 20, 20, 20, 15],
+                    "Fator":   ["Stage", "Potencial", "Velocidade", "Conta", "Agente"],
+                    "Pontos":  [row.get(c, 0) for c in ["score_stage", "score_potential",
+                                                          "score_velocity", "score_account", "score_agent"]],
+                    "Máximo":  [25, 20, 20, 20, 15],
                 }
                 fdf = pd.DataFrame(factor_data)
                 bar_colors = [
@@ -644,22 +713,20 @@ with tab_detail:
                 )
                 st.plotly_chart(fig_detail, use_container_width=True)
 
-            # Por que este score
             st.markdown("**Por que este score?**")
             for exp in str(row.get("explanations", "")).split(" | "):
                 if exp.strip():
                     st.markdown(f"- {exp.strip()}")
 
-            # Ação recomendada
             st.markdown("---")
-            st.markdown("**Ação recomendada para esta semana**")
-            vel = float(row.get("score_velocity", 0))
-            if score_val >= SCORE_HOT:
-                st.success("✅ Ligue hoje. Agende reunião de fechamento. Este deal está pronto.")
-            elif score_val >= SCORE_WARM:
+            st.markdown("**Ação recomendada**")
+            vel = float(row.get("score_velocity", 10))
+            if score >= HOT_THR:
+                st.success("✅ Ligue hoje. Agende fechamento. Este deal está pronto.")
+            elif score >= WARM_THR:
                 if vel < 7:
-                    st.warning("⚠️ Deal esfriando. Crie urgência: desconto por prazo, case de sucesso, demo ao vivo.")
+                    st.warning("⚠️ Deal esfriando. Crie urgência: desconto por prazo, case de sucesso.")
                 else:
-                    st.info("📌 Envie proposta formal ou próximo passo claro. Está próximo do quente.")
+                    st.info("📌 Envie proposta formal. Está próximo do quente.")
             else:
-                st.info("💤 Não foque aqui agora. Coloque em sequência de nurture e reveja em 30 dias.")
+                st.info("💤 Coloque em nurture e reveja em 30 dias.")
